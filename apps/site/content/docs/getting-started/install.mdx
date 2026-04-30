@@ -1,0 +1,83 @@
+---
+title: "Install"
+description: "Bootstrap a new doks project with the create-doks CLI."
+category: "getting-started"
+tags: ["install", "cli", "scaffold"]
+chunk_id: "docs-install"
+icon: "download"
+order: 1
+vector_metadata:
+  importance: 0.85
+  related_topics: ["quickstart", "upgrade", "site-config"]
+  code_languages: ["bash"]
+---
+
+The fastest way to start a new doks site is the `create-doks` CLI. It clones the
+template, asks a few questions, and runs `npm install` for you.
+
+### <Chunk id="install-cli" importance={0.9} tags={["install"]}>Run the scaffold</Chunk>
+
+```bash
+npx create-doks my-docs
+```
+
+You'll be prompted for:
+
+- **Project directory**. Where to create the project (e.g. `my-docs`).
+- **Site name**. Used in the header logo and `<title>` template.
+- **GitHub URL**. Header link and CTA target.
+- **Default theme**. `light`, `dark`, `blue-pearl`, or `sand`.
+- **Keep the demo MDX content?** If yes, you get the full sample corpus
+  (component galleries, archetypes, getting-started pages) as a learning
+  reference. If no (the default), you get a single `index.mdx` placeholder
+  and an empty `content/docs/` to fill in yourself.
+
+The CLI then:
+
+1. Clones [`apps/site`](<GithubUrl />/tree/main/apps/site) via `degit`.
+2. Rewrites `lib/site.config.ts` with your answers.
+3. Rewrites `package.json` (slugged name, `doks-core: "latest"`).
+4. Strips the demo MDX content if you opted out.
+5. Runs `npm install`.
+
+### <Chunk id="install-samples" importance={0.7} tags={["cli", "samples", "demo"]}>Sample content: keep or strip</Chunk>
+
+The template ships with a full demo corpus under `content/docs/`: component
+galleries (`samples/components/`), full-page archetypes
+(`samples/archetypes/`), getting-started pages, reference docs, and guides.
+Two ways to handle it:
+
+**Keep them** if you want examples to copy from while you author. They sit
+in your repo as plain MDX, so you can refactor and rename freely.
+
+**Strip them** for a true blank slate. The CLI replaces `content/docs/`
+with a single `index.mdx` placeholder. Browse the [live demo](https://github.com/getdoks/doks)
+to see the same examples online without keeping them in your repo.
+
+The default is **strip**, since most production projects want clean content.
+Set the prompt to "yes" or pass `--samples` to keep them.
+
+### <Chunk id="install-flags" importance={0.6} tags={["cli"]}>Flags</Chunk>
+
+| Flag | Effect |
+| --- | --- |
+| `--samples` | Keep the demo MDX corpus. |
+| `--no-samples` | Strip demo content; start with a single `index.mdx`. (default) |
+| `--no-install` | Skip `npm install` (e.g. for CI scaffolds). |
+| `-y`, `--yes` | Accept all defaults; useful for non-interactive scripts. |
+| `--template <spec>` | Use a different `degit` spec (default `getdoks/doks/apps/site`). |
+| `--template-path <dir>` | Copy from a local directory instead of cloning. |
+| `-h`, `--help` | Show usage. |
+
+### <Chunk id="install-next" importance={0.7} tags={["install"]}>Next</Chunk>
+
+After scaffolding:
+
+```bash
+cd my-docs
+npm run ingest    # builds data/docs.db
+npm run dev       # starts http://localhost:3000
+```
+
+For brand customization, see [Site config](/docs/reference/site-config). To
+upgrade later, see [Upgrade](/docs/getting-started/upgrade).

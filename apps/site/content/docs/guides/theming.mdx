@@ -1,0 +1,481 @@
+---
+title: "Theming"
+description: "How doks themes are structured, every CSS token they expose, and how to ship a custom theme in three steps."
+category: "guides"
+tags: ["theming", "css", "design-tokens", "customization"]
+chunk_id: "docs-theming"
+icon: "palette"
+order: 3
+vector_metadata:
+  importance: 0.85
+  related_topics: ["mdx-components", "project-structure"]
+  code_languages: ["css", "typescript"]
+---
+
+A doks theme is a single CSS rule block. There is no theme engine, no styled-components, no JS at runtime. Every colour, surface, and font is a plain CSS custom property defined under `:root[data-theme="<name>"]`. Authoring a theme means picking values for those properties.
+
+Looking for the themes that ship by default? See the [shipped themes catalog](/docs/reference/themes). Looking for *page-level* styling primitives like `.sec`, `.sec-eye`, `.sec-h2`? See [Styling pages](/docs/guides/styling-pages). This guide focuses on building or modifying themes themselves.
+
+### <Chunk id="th-where-themes-live" importance={0.9} tags={["files", "structure"]}>Where themes live</Chunk>
+
+Two files own the system; nothing else needs to know about themes.
+
+- **`app/themes.css`**. Every theme is a `:root[data-theme="<name>"] { … }` block in this file. Three themes ship by default: `light`, `dark`, and `ocean`. The light block also doubles as the unconditional `:root` so the page renders with no JS.
+- **`lib/theme.ts`**. A small registry that exports `THEMES` (`{ id, label, description }[]`) plus `getTheme()`, `setTheme(id)`, and `toggleLightDark()`. The header toggle and any custom theme picker read from this.
+
+Everything else. Components, MDX, `globals.css`. Only references CSS variables. You never touch a hex code outside `themes.css`.
+
+### <Chunk id="th-token-reference" importance={0.95} tags={["tokens", "reference", "css-variables"]}>Token reference</Chunk>
+
+Every theme defines exactly these properties. Skip one and that surface inherits from the `light` defaults. Fine for incremental theming, dangerous if you forget a token used by the dark theme you copied.
+
+**Brand palette**
+
+| Token | Used for |
+|---|---|
+| `--brand` | Primary action colour: links, focus rings, CTA buttons, active sidebar item |
+| `--brand-soft` | Tinted backgrounds for hover states, badges, highlighted cards |
+| `--brand-wash` | Borders + hover edges that need to read as "branded" without shouting |
+| `--brand-deep` | Deep-saturation accent. Used sparingly, e.g. CTA gradients |
+| `--brand-mid` | Mid-tone, sits between `--brand` and `--brand-soft` |
+
+**Text**
+
+| Token | Used for |
+|---|---|
+| `--ink` | Headings (h1, h2). The highest-contrast text on the page |
+| `--text` | Body prose |
+| `--muted` | Metadata, captions, "Updated …" labels |
+| `--subtle` | Placeholders, eyebrows, footnotes. Lowest contrast |
+
+**Surfaces**
+
+| Token | Used for |
+|---|---|
+| `--paper` | The page background. Most visible token |
+| `--soft` | Card backgrounds (callouts, quick-jump tiles) |
+| `--tint` | Hover states, zebra rows, very subtle fills |
+| `--line` | Borders and dividers |
+| `--code` | Background for fenced code blocks (rendered dark on every theme) |
+| `--hdr-bg` | Header background. Usually `paper` with alpha so blur shows through |
+
+**Typography**
+
+| Token | Used for |
+|---|---|
+| `--sans` | Body and UI text |
+| `--serif` | Hero titles and large display headings |
+| `--mono` | Inline `code`, code blocks, kbd shortcuts |
+
+**Layout**
+
+| Token | Used for |
+|---|---|
+| `--nav` | Left sidebar width |
+| `--hdr` | Header height. Used in `top:` calculations for sticky elements |
+
+### <Chunk id="th-color-derivation" importance={0.85} tags={["color", "palette", "derivation"]}>Choosing values for each token</Chunk>
+
+You don't have to invent fifteen colors from scratch. Most of the tokens are derivable from one brand color and one ink color. A workable strategy:
+
+**Pick two anchors.**
+- `--brand`. The one colour your product is known for. Pick the saturated version (think button background, not link text).
+- `--ink`. The colour of the highest-contrast text on the page. Usually a near-black with a tiny tint of your brand hue, never pure `#000`.
+
+**Derive the brand family from `--brand`.**
+
+| Token | Recipe | Example (brand `#8115dd`) |
+|---|---|---|
+| `--brand-soft` | Same hue, ~10–15% saturation, ~95% lightness | `#f0e4fd` |
+| `--brand-wash` | Same hue, ~50% saturation, ~80% lightness | `#d4b5f8` |
+| `--brand-mid` | Same hue, ~75% saturation, ~70% lightness | `#ba79f2` |
+| `--brand-deep` | Same hue, max saturation, ~30% lightness | `#2f2b82` |
+
+The easiest way to compute these is to convert your `--brand` to HSL, then keep `H` constant and step `S` and `L` along the rows above. The macOS Digital Color Meter, the Chrome DevTools color picker, and any online HSL tool will do this in two seconds.
+
+**Derive the text ramp from `--ink`.**
+
+| Token | Recipe | Example (ink `#2c2c3a`) |
+|---|---|---|
+| `--text` | Same hue, ~25% lighter | `#44445a` |
+| `--muted` | Same hue, ~50% lighter | `#6b6b85` |
+| `--subtle` | Same hue, ~70% lighter | `#9898b0` |
+
+**Derive the surface ramp from `--paper` and `--ink`.**
+
+| Token | Recipe |
+|---|---|
+| `--paper` | Pure white in light themes; near-black in dark themes |
+| `--soft` | Mix `--ink` 5% into `--paper` |
+| `--tint` | Mix `--ink` 2% into `--paper` (subtler than `--soft`) |
+| `--line` | Mix `--ink` 12% into `--paper` |
+
+You can implement these mixes with the modern CSS `color-mix()` function if you'd rather not freeze the values, but the shipped themes use frozen hex codes so the page renders identically across browsers without polyfill-checking.
+
+### <Chunk id="th-add-a-theme" importance={0.95} tags={["how-to", "create", "custom"]}>Add a custom theme in three steps</Chunk>
+
+<Steps>
+  <Step title="Define the tokens">
+    Open `app/themes.css` and copy any existing block (the `ocean` block is the easiest starting point because it's already in the right shape). Rename the selector and edit the values:
+
+```css
+:root[data-theme="forest"] {
+    --brand:       #15803d;
+    --brand-soft:  #dcfce7;
+    --brand-wash:  #86efac;
+    --brand-deep:  #14532d;
+    --brand-mid:   #4ade80;
+
+    --ink:    #14241a;
+    --text:   #2c3a30;
+    --muted:  #5a6e60;
+    --subtle: #8aa090;
+
+    --line:   #d4e6d8;
+    --soft:   #ecf5ee;
+    --tint:   #f5faf6;
+    --paper:  #ffffff;
+    --code:   #0a2014;
+    --hdr-bg: rgba(255, 255, 255, 0.95);
+
+    color-scheme: light;
+}
+```
+
+  </Step>
+  <Step title="Register it">
+    Append an entry to the `THEMES` array in `lib/theme.ts`. The `id` must match the `data-theme` value you used in step 1.
+
+```typescript
+export const THEMES: ThemeMeta[] = [
+  { id: 'light',  label: 'Light' },
+  { id: 'dark',   label: 'Dark' },
+  { id: 'ocean',  label: 'Ocean',  description: 'Cool blues, light surface' },
+  { id: 'forest', label: 'Forest', description: 'Forest green, light surface' },
+];
+```
+
+  </Step>
+  <Step title="Try it out">
+    Run `npm run dev`, open the browser DevTools console, and run:
+
+```javascript
+document.documentElement.setAttribute('data-theme', 'forest');
+```
+
+If everything looks right, persist it with `localStorage.setItem('dd-theme', 'forest')` and reload.
+  </Step>
+</Steps>
+
+### <Chunk id="th-worked-example" importance={0.9} tags={["walkthrough", "example", "midnight"]}>Worked example: building a "Midnight" theme</Chunk>
+
+Let's build a complete dark theme called `midnight` with a deep indigo brand. The whole process takes about ten minutes.
+
+<Steps>
+  <Step title="Pick the two anchors">
+    `--brand` will be `#6366f1` (indigo-500). `--ink` will be `#e8eaff` because this is a dark theme. The highest-contrast text is *light*, not black. The "ramp lighter" rules from the derivation table flip into "ramp darker" for dark themes.
+  </Step>
+  <Step title="Derive the brand family">
+    Convert `#6366f1` to HSL: `hsl(239, 84%, 67%)`. Step the saturation and lightness as in the derivation table, but for a dark theme `--brand-soft` is darker than `--brand`, not lighter:
+
+```
+--brand:       #6366f1   /* hsl(239, 84%, 67%). Anchor */
+--brand-soft:  #1e1b3d   /* hsl(239, 38%, 18%). Dark tinted bg */
+--brand-wash:  #4338ca   /* hsl(244, 58%, 51%). Branded borders */
+--brand-mid:   #818cf8   /* hsl(234, 89%, 74%). Sits between */
+--brand-deep:  #c7d2fe   /* hsl(229, 96%, 89%). Bright accent */
+```
+
+Note `--brand-deep` is *lighter* than `--brand` here. In a dark theme, "deep" means "maximum visual punch". And on a dark background, that comes from light, not dark.
+  </Step>
+  <Step title="Derive the text ramp">
+    Anchor is `#e8eaff`. Step it darker and toward muted:
+
+```
+--ink:    #e8eaff   /* high contrast on dark paper */
+--text:   #c7c9e8   /* body */
+--muted:  #8b8fb8   /* metadata */
+--subtle: #5e6285   /* placeholders */
+```
+
+Run each one against your planned `--paper` (next step) in a contrast checker before committing.
+  </Step>
+  <Step title="Derive the surfaces">
+    `--paper` is the page background. For midnight, pick `#0a0a1a`. Dark enough to feel "night" but not pure black. Then derive the rest by mixing `--ink` (light grey) into it:
+
+```
+--paper:  #0a0a1a   /* page background */
+--tint:   #15152b   /* hover, zebra (paper + 8% ink) */
+--soft:   #1c1c33   /* card backgrounds */
+--line:   #2a2a45   /* borders */
+--code:   #050510   /* code block. Slightly darker than paper */
+--hdr-bg: rgba(10, 10, 26, 0.92)   /* paper as rgba with alpha */
+```
+  </Step>
+  <Step title="Assemble the block">
+    Paste this into `app/themes.css`:
+
+```css
+:root[data-theme="midnight"] {
+    --brand:       #6366f1;
+    --brand-soft:  #1e1b3d;
+    --brand-wash:  #4338ca;
+    --brand-mid:   #818cf8;
+    --brand-deep:  #c7d2fe;
+
+    --ink:    #e8eaff;
+    --text:   #c7c9e8;
+    --muted:  #8b8fb8;
+    --subtle: #5e6285;
+
+    --line:   #2a2a45;
+    --soft:   #1c1c33;
+    --tint:   #15152b;
+    --paper:  #0a0a1a;
+    --code:   #050510;
+    --hdr-bg: rgba(10, 10, 26, 0.92);
+
+    color-scheme: dark;
+}
+```
+
+Note `color-scheme: dark`. This tells the browser to use dark form controls and scrollbars, matching the theme.
+  </Step>
+  <Step title="Register">
+    Append to `THEMES` in `lib/theme.ts`:
+
+```typescript
+{ id: 'midnight', label: 'Midnight', description: 'Deep indigo on near-black' },
+```
+  </Step>
+  <Step title="Try it">
+    DevTools console: `setTheme('midnight')` (the helper is exposed on `window` only when you import it manually, so you can also use `document.documentElement.setAttribute('data-theme', 'midnight')`).
+  </Step>
+</Steps>
+
+### <Chunk id="th-pairing-themes" importance={0.8} tags={["pairing", "light-dark", "variants"]}>Shipping a light/dark pair</Chunk>
+
+A common need: two variants of the same brand, one light-surface and one dark-surface. The pattern is two registered themes with shared brand identity but inverted text and surface ramps.
+
+```css
+:root[data-theme="warm-light"] {
+    --brand:       #ea580c;
+    --brand-soft:  #fff1e6;
+    --brand-wash:  #fdba74;
+    --brand-deep:  #7c2d12;
+    --brand-mid:   #fb923c;
+
+    --ink:    #2a1a0a;
+    --text:   #44331e;
+    --muted:  #6e5a45;
+    --subtle: #9a8773;
+
+    --line:   #ead8c8;
+    --soft:   #fbf4ee;
+    --tint:   #fdf9f5;
+    --paper:  #ffffff;
+    --code:   #1a0e02;
+    --hdr-bg: rgba(255, 255, 255, 0.95);
+
+    color-scheme: light;
+}
+
+:root[data-theme="warm-dark"] {
+    --brand:       #fb923c;
+    --brand-soft:  #3d1c0a;
+    --brand-wash:  #9a4f1a;
+    --brand-deep:  #fed7aa;
+    --brand-mid:   #f97316;
+
+    --ink:    #fef3e8;
+    --text:   #ddc8b0;
+    --muted:  #a08770;
+    --subtle: #6e5a45;
+
+    --line:   #3d2818;
+    --soft:   #1f1208;
+    --tint:   #160d05;
+    --paper:  #0e0804;
+    --code:   #050200;
+    --hdr-bg: rgba(14, 8, 4, 0.92);
+
+    color-scheme: dark;
+}
+```
+
+Brand identity stays consistent (orange) but the ramp directions invert. Register both in `THEMES`. To make the header toggle flip between *these two* instead of the canonical light/dark, override `toggleLightDark()` in `lib/theme.ts`:
+
+```typescript
+export function toggleLightDark(): void {
+  const current = getTheme();
+  const next = current === 'warm-dark' ? 'warm-light' : 'warm-dark';
+  setTheme(next);
+}
+```
+
+### <Chunk id="th-os-preference" importance={0.75} tags={["prefers-color-scheme", "system", "auto"]}>Following the OS preference automatically</Chunk>
+
+The default init script in `app/layout.tsx` already respects `prefers-color-scheme: dark` for first-time visitors:
+
+```javascript
+var saved = localStorage.getItem('dd-theme');
+var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+document.documentElement.setAttribute(
+  'data-theme',
+  saved || (prefersDark ? 'dark' : 'light'),
+);
+```
+
+For a paired theme like `warm-light` / `warm-dark`, change the fallback line:
+
+```javascript
+saved || (prefersDark ? 'warm-dark' : 'warm-light'),
+```
+
+To **react live** when the OS preference changes (user flips dark mode mid-session), add a listener in a client component near the top of the tree:
+
+```typescript
+useEffect(() => {
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  const handler = (e: MediaQueryListEvent) => {
+    // Only auto-switch if the user hasn't made an explicit choice.
+    if (!localStorage.getItem('dd-theme')) {
+      setTheme(e.matches ? 'warm-dark' : 'warm-light');
+    }
+  };
+  mq.addEventListener('change', handler);
+  return () => mq.removeEventListener('change', handler);
+}, []);
+```
+
+The `localStorage` check is important. Once a user picks a theme, respect that choice over the OS.
+
+### <Chunk id="th-default-theme" importance={0.85} tags={["default", "config"]}>Make a theme the default</Chunk>
+
+The page picks its initial theme in this order:
+
+1. The value stored in `localStorage` under the `dd-theme` key, if present.
+2. Otherwise, `dark` if the OS prefers dark mode (`prefers-color-scheme: dark`).
+3. Otherwise, the bare `:root` block. `light`.
+
+To change the project-wide default, edit the inline init script in `app/layout.tsx`:
+
+```javascript
+var saved = localStorage.getItem('dd-theme');
+var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+document.documentElement.setAttribute(
+  'data-theme',
+  saved || (prefersDark ? 'dark' : 'forest')   // <- change "light" to "forest"
+);
+```
+
+The init runs in the `<head>` before React hydrates, so there's no flash of the wrong theme.
+
+### <Chunk id="th-using-tokens" importance={0.8} tags={["mdx-components", "css", "usage"]}>Using tokens in your own components</Chunk>
+
+Always reference tokens through `var(--token)` so the value follows the active theme. Inline hex codes break under any theme other than the one they were tuned for.
+
+```css
+.my-callout {
+  background: var(--soft);
+  border:     1px solid var(--line);
+  color:      var(--text);
+}
+.my-callout strong {
+  color: var(--brand);
+}
+```
+
+In React components that use CSS-in-JS (e.g. `styled-jsx`), the same syntax works. See `components/SemanticSearch.tsx` for an example. The component declares fallbacks (`var(--accent, #6366f1)`) so it still renders cleanly in isolated test environments where the doks variables aren't defined.
+
+### <Chunk id="th-theme-picker" importance={0.65} tags={["picker", "ui", "ux"]}>Adding a theme picker UI</Chunk>
+
+The header ships with a binary light/dark toggle. To expose all registered themes, drop a small picker anywhere in the tree:
+
+```tsx
+'use client';
+import { THEMES, setTheme, getTheme } from '@/lib/theme';
+import { useEffect, useState } from 'react';
+
+export function ThemePicker() {
+  const [active, setActive] = useState('light');
+  useEffect(() => setActive(getTheme()), []);
+  return (
+    <select
+      value={active}
+      onChange={(e) => {
+        setTheme(e.target.value);
+        setActive(e.target.value);
+      }}
+    >
+      {THEMES.map((t) => (
+        <option key={t.id} value={t.id}>{t.label}</option>
+      ))}
+    </select>
+  );
+}
+```
+
+`setTheme` writes both the DOM attribute and `localStorage`, so the choice survives a reload.
+
+### <Chunk id="th-testing-workflow" importance={0.85} tags={["devtools", "testing", "iteration"]}>The DevTools live-tweaking workflow</Chunk>
+
+Editing `themes.css`, saving, waiting for Turbopack, scanning the page is slow. Tweak in the browser first, paste the values into the file when you're happy. The workflow:
+
+<Steps>
+  <Step title="Open DevTools on the docs site">
+    Inspect any element. In the Styles panel, click on the `:root` selector at the bottom. DevTools shows every CSS custom property currently in scope.
+  </Step>
+  <Step title="Override one token at a time">
+    Click any `--token` value to edit it inline. The whole page re-renders instantly because every component reads through `var(--token)`. No reload, no Turbopack roundtrip.
+  </Step>
+  <Step title="Switch themes from the console">
+    Quick swaps without clicking the toggle:
+
+```javascript
+document.documentElement.setAttribute('data-theme', 'midnight');
+```
+
+This is how you compare a candidate theme against the existing ones without committing anything.
+  </Step>
+  <Step title="Test on real content">
+    Walk these pages in your candidate theme. They exercise different surfaces:
+
+    - `/docs`. Hero, QJump cards, callouts
+    - `/docs/samples/archetypes/authentication`. Code blocks, headings, body prose
+    - `/docs/reference/mdx-components`. Tables, all component variants
+    - The right-rail TOC and chat panel. Easy to forget
+    - Hover the search input. Focus rings use `--brand`
+  </Step>
+  <Step title="Copy values back into themes.css">
+    When the page looks right, read the final values from the DevTools Styles panel and paste them into your theme block. Turbopack picks up the file change on save.
+  </Step>
+</Steps>
+
+### <Chunk id="th-pitfalls" importance={0.85} tags={["pitfalls", "common-mistakes", "debugging"]}>Common pitfalls</Chunk>
+
+The bugs that take longest to spot, ranked by how many times they've already cost an afternoon somewhere:
+
+**Forgetting `color-scheme`.** The browser uses `color-scheme` to pick the colour of native scrollbars, form controls, and the page background flash before CSS loads. A dark theme without `color-scheme: dark` shows a bright-white flash on first load. Always set it to match the brightness of `--paper`.
+
+**Skipping a token in a copied block.** Cascade still works. Missing tokens fall back to whatever `:root` defines (usually the light defaults). The result is a dark theme with one randomly-light element. Always paste the *full* token list, even if some values are unchanged.
+
+**Using opaque `--hdr-bg`.** The header has `backdrop-filter: blur(…)` applied. If `--hdr-bg` is a fully-opaque color, the blur effect is invisible because there's nothing translucent to blur through. Always use `rgba(…, 0.92)` or `0.95`, never a hex.
+
+**`--code` too light.** The syntax highlighter assumes a dark background. A light `--code` makes orange and yellow tokens almost invisible. Even in a light theme, keep `--code` dark. It's an exception to the otherwise-light surface family.
+
+**Not testing the right rail.** The TOC, chat panel, and "Hide panel" bookmark all use the same tokens but they're easy to forget. Open the docs page, toggle the chat tab, collapse the panel. All in your candidate theme.
+
+**Equal-specificity overrides.** If you add a custom rule that uses `.chat-sidebar.something { width: 0 }` it'll fight with the existing `.chat-sidebar.chat-open { width: 300px }`. Same-specificity ties are won by source order. Which means a perfectly correct rule can be silently overridden by an unrelated later rule. Doubling the active class (`.something.something`) is a safe specificity bump.
+
+**Theme name collision in `localStorage`.** `dd-theme` is the storage key. If multiple doks deployments share an origin (unusual but possible in dev), they'll fight over the value. Rename `STORAGE_KEY` in `lib/theme.ts` if you need isolation.
+
+### <Chunk id="th-theme-checklist" importance={0.7} tags={["checklist", "qa"]}>Quality checklist</Chunk>
+
+Before shipping a custom theme, walk these:
+
+- **Contrast.** Run `--text` on `--paper`, `--ink` on `--paper`, and `--brand` on `--soft` through a contrast checker. WCAG AA wants 4.5:1 for body text.
+- **Code legibility.** `--code` is the background for code blocks; the syntax highlighter colours are fixed, so make sure your `--code` is dark enough.
+- **Header blur.** `--hdr-bg` should use alpha (e.g. `rgba(…, 0.95)`) so the backdrop blur effect is visible.
+- **Cycle the toggle.** The default header toggle flips between `light` and `dark`. If your custom theme is the default, the first click still goes to `dark`. That's by design, but verify it doesn't look broken.
+- **Sidebar icons.** A few SVGs use `currentColor`; check the left sidebar and the right-rail bookmark in your theme.

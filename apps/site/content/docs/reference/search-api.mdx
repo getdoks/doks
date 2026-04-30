@@ -1,0 +1,108 @@
+---
+title: "Search API"
+description: "POST /api/docs/search. Request and response shape, errors, and how SemanticSearch uses it."
+category: "reference"
+tags: ["api", "search", "http"]
+chunk_id: "docs-search-api"
+icon: "plug"
+order: 3
+vector_metadata:
+  importance: 0.85
+  related_topics: ["semantic-search", "mdx-components"]
+  code_languages: ["bash", "typescript", "json"]
+---
+
+The search endpoint is the only HTTP surface doks exposes. It embeds a query, runs k-NN against `chunks_vec`, re-ranks with the importance boost, and returns a JSON list. There is no auth. The route is intended for the same site that hosts your docs.
+
+### <Chunk id="api-request" importance={0.95} tags={["request", "post", "shape"]}>Request</Chunk>
+
+The route is at `/api/docs/search` and accepts both POST (JSON body) and GET (query string). POST is the canonical form; GET is a thin convenience wrapper.
+
+```bash
+curl -X POST http://localhost:3000/api/docs/search \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "how do JWTs get refreshed?", "topK": 5}'
+```
+
+```bash
+curl 'http://localhost:3000/api/docs/search?q=jwt+refresh&topK=5'
+```
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `query` | string |. | The user's search input. Trimmed; an empty value returns `[]`. |
+| `topK` | number | `5` | Result count. Clamped to `[1, 20]`. |
+
+The route uses `runtime: 'nodejs'` because `better-sqlite3` ships native bindings that don't run on the Edge runtime.
+
+### <Chunk id="api-response" importance={0.95} tags={["response", "json", "shape"]}>Response</Chunk>
+
+```json
+{
+  "query": "how do JWTs get refreshed?",
+  "results": [
+    {
+      "chunkId": "samples-archetype-auth:auth-jwt-flow",
+      "pageHref": "/docs/samples/archetypes/authentication",
+      "pageTitle": "Archetype. Concept page (Authentication)",
+      "heading": "JWT issuance flow",
+      "category": "samples",
+      "importance": 0.95,
+      "tags": ["jwt", "flow"],
+      "snippet": "When a user signs in, the identity provider returns…",
+      "score": 0.812,
+      "distance": 0.376
+    }
+  ]
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `chunkId` | string | Composite key: `{pageChunkId}:{localId}`. |
+| `pageHref` | string | URL of the page the chunk lives on. |
+| `pageTitle` | string | Frontmatter `title`. |
+| `heading` | string | Heading text (or `<Chunk>` body for inline tags). |
+| `category` | string \| null | Frontmatter `category`. |
+| `importance` | number | `0–1`, copied from the chunk. |
+| `tags` | `string[]` | Per-chunk tags. |
+| `snippet` | string | First ~320 chars of the chunk body, ellipsized. |
+| `score` | number | Re-ranked score: `cosineSim + 0.15·(importance - 0.5)`. Higher is better. |
+| `distance` | number | Raw cosine distance from sqlite-vec, `[0, 2]`. Lower is better. |
+
+The `score` and `distance` are both included so a frontend can pick whichever ranking it prefers. The default is to sort descending by `score`.
+
+### <Chunk id="api-errors" importance={0.7} tags={["errors", "status-codes"]}>Errors</Chunk>
+
+| Status | Body | Cause |
+|---|---|---|
+| `200` | `{ "results": [] }` | Empty or whitespace-only query. |
+| `400` | `{ "error": "Invalid JSON" }` | POST body wasn't JSON. |
+| `500` | `{ "error": "<message>" }` | Embedding API unreachable, sqlite-vec read failed, etc. The error message is the runtime exception's `.message`. |
+
+Errors are not retried server-side. If the embedding provider rate-limits you, the request fails. Implement retry-with-backoff on the client.
+
+### <Chunk id="api-deep-link" importance={0.75} tags={["deep-link", "anchor", "navigation"]}>Linking to a result</Chunk>
+
+The `chunkId` is `{pageChunkId}:{localId}`. To deep-link to the in-page section, take the part after the colon and use it as the URL fragment:
+
+```typescript
+const localId = result.chunkId.split(':').pop();
+const url = `${result.pageHref}#${localId}`;
+```
+
+This works because the `<Chunk>` component renders `<section id="{localId}">` around its body, and rehype-slug ensures `<h2>` / `<h3>` headings have matching ids. `<SemanticSearch />` does this automatically.
+
+### <Chunk id="api-call-from-server" importance={0.6} tags={["server", "internal"]}>Calling from server code</Chunk>
+
+For server components or other route handlers, skip the HTTP round-trip and call `vectorSearch` directly:
+
+```typescript
+import { embedOne } from '@/lib/embed';
+import { vectorSearch } from '@/lib/db';
+
+const queryEmbedding = await embedOne(userQuery, 'query');
+const results = vectorSearch(queryEmbedding, 5);
+```
+
+Both functions are safe to call from any Node-runtime context. Don't import them from a client component. `better-sqlite3` will fail to bundle.

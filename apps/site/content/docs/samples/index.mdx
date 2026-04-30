@@ -1,0 +1,96 @@
+---
+title: "Samples"
+description: "A worked example showing every doks MDX component in realistic page layouts."
+category: "samples"
+tags: ["samples", "examples", "components", "templates"]
+chunk_id: "docs-samples-index"
+icon: "puzzle"
+order: 0
+eyebrow: "Worked examples · MDX components in context"
+vector_metadata:
+  importance: 0.6
+  related_topics: ["mdx-components", "frontmatter", "writing-rag-friendly-mdx"]
+---
+
+<Hero
+  eyebrow="Worked examples · MDX components in context"
+  title="See how a doks page actually looks."
+  description="Every component, every archetype, every authoring pattern. With the source visible next to the rendered result. Copy what you like."
+>
+  <HeroButton href="/docs/samples/kitchen-sink">
+    Browse the kitchen sink
+  </HeroButton>
+  <HeroButton href="/docs/samples/components/banners" variant="ghost">
+    Component gallery →
+  </HeroButton>
+</Hero>
+
+<QJump>
+  <QCard
+    href="/docs/samples/components/banners"
+    title="Components"
+    description="Hero, Callouts, QJump, Steps, Tabs, CodeBlock. Each one shown in isolation with source."
+  />
+  <QCard
+    href="/docs/samples/archetypes/landing-page"
+    title="Page archetypes"
+    description="A landing page, a tutorial, an API reference. Three full pages built from the same primitives."
+  />
+  <QCard
+    href="/docs/samples/kitchen-sink"
+    title="Kitchen sink"
+    description="Every component on one page. The fastest way to scan what's available before you start writing."
+  />
+  <QCard
+    href="/docs/reference/mdx-components"
+    title="Component reference"
+    description="Strictly the API: prop tables, types, defaults. Use this when you know what you want."
+  />
+</QJump>
+
+<div className="content">
+
+<div className="sec">
+
+<div className="sec-eye">How to use this section</div>
+
+<h2 className="sec-h2">Read, copy, adapt.</h2>
+
+<div className="sec-lead">Every page in <code>content/docs/samples/</code> is also a real MDX file in your project. Open it next to your editor and steal what you want.</div>
+
+<Callout type="tip" title="Tip">
+  The fastest path to a polished doc is to start from one of the
+  [archetypes](/docs/samples/archetypes/landing-page), strip what you don't
+  need, and replace the copy with your own.
+</Callout>
+
+</div>
+
+<div className="sec">
+
+<div className="sec-eye">Directory layout</div>
+
+<h2 className="sec-h2">What's in this folder</h2>
+
+```
+content/docs/samples/
+├── index.mdx                         ← this page
+├── components/                       ← single-component galleries
+│   ├── banners.mdx                   ← <Hero>, <HeroButton>
+│   ├── callouts.mdx                  ← <Callout type="tip|warn|note">
+│   ├── cards.mdx                     ← <QJump>, <QCard>
+│   ├── code-blocks.mdx               ← fenced code → <CodeBlock>
+│   ├── steps.mdx                     ← <Steps>, <Step>
+│   ├── tabs.mdx                      ← <Tabs>, <Tab>
+│   └── images.mdx                    ← markdown <img>, <Figure caption=…>
+├── archetypes/                       ← full-page templates
+│   ├── landing-page.mdx              ← marketing-style page
+│   ├── tutorial.mdx                  ← walkthrough with steps + code
+│   ├── api-reference.mdx             ← endpoint reference with tabs
+│   └── authentication.mdx            ← concept page (fictional auth system)
+└── kitchen-sink.mdx                  ← every component, one page
+```
+
+</div>
+
+</div>

@@ -1,0 +1,131 @@
+---
+title: "Tabs"
+description: "Tabbed content for parallel options. Language pickers, framework variants, OS-specific instructions."
+category: "samples"
+tags: ["tabs", "parallel", "options"]
+chunk_id: "samples-tabs"
+icon: "tabs"
+order: 6
+vector_metadata:
+  importance: 0.55
+  related_topics: ["api-reference", "code-blocks"]
+---
+
+`<Tabs>` shows one panel at a time and lets the reader switch between
+parallel views of the same content. Each `<Tab>` declares a `label` and any
+MDX as children.
+
+### <Chunk id="tabs-langs" importance={0.7} tags={["tabs", "languages"]}>Language picker</Chunk>
+
+The most common use: showing the same example in multiple languages.
+
+<Tabs>
+  <Tab label="cURL">
+    ```bash
+    curl -X POST http://localhost:3000/api/docs/search \
+      -H 'content-type: application/json' \
+      -d '{"query":"how do chunks work","topK":5}'
+    ```
+  </Tab>
+  <Tab label="JavaScript">
+    ```js
+    const res = await fetch('/api/docs/search', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query: 'how do chunks work', topK: 5 }),
+    });
+    const { results } = await res.json();
+    ```
+  </Tab>
+  <Tab label="Python">
+    ```py
+    import requests
+    r = requests.post(
+        'http://localhost:3000/api/docs/search',
+        json={'query': 'how do chunks work', 'topK': 5},
+    )
+    results = r.json()['results']
+    ```
+  </Tab>
+</Tabs>
+
+````mdx
+<Tabs>
+  <Tab label="cURL">
+    ```bash
+    curl -X POST /api/docs/search -d '{"query":"…","topK":5}'
+    ```
+  </Tab>
+  <Tab label="JavaScript">
+    ```js
+    const res = await fetch('/api/docs/search', { method: 'POST', body: …});
+    ```
+  </Tab>
+  <Tab label="Python">
+    ```py
+    requests.post('/api/docs/search', json={'query': '…'})
+    ```
+  </Tab>
+</Tabs>
+````
+
+### <Chunk id="tabs-os" importance={0.55} tags={["tabs", "os"]}>OS-specific instructions</Chunk>
+
+<Tabs>
+  <Tab label="macOS">
+    ```bash
+    xcode-select --install   # provides the C toolchain for better-sqlite3
+    npm install
+    ```
+  </Tab>
+  <Tab label="Linux (Debian/Ubuntu)">
+    ```bash
+    sudo apt-get install -y build-essential
+    npm install
+    ```
+  </Tab>
+  <Tab label="Windows (WSL recommended)">
+    Use WSL. Native Windows builds of `better-sqlite3` are fragile.
+    Inside the WSL shell, follow the Linux instructions.
+  </Tab>
+</Tabs>
+
+### <Chunk id="tabs-package-manager" importance={0.5} tags={["tabs", "npm", "yarn", "pnpm"]}>Package-manager picker</Chunk>
+
+<Tabs>
+  <Tab label="npm">
+    ```bash
+    npm install doks-core
+    ```
+  </Tab>
+  <Tab label="pnpm">
+    ```bash
+    pnpm add doks-core
+    ```
+  </Tab>
+  <Tab label="yarn">
+    ```bash
+    yarn add doks-core
+    ```
+  </Tab>
+  <Tab label="bun">
+    ```bash
+    bun add doks-core
+    ```
+  </Tab>
+</Tabs>
+
+### <Chunk id="tabs-when" importance={0.45} tags={["tabs", "guidance"]}>When to use tabs</Chunk>
+
+| Use it for | Skip it for |
+| --- | --- |
+| Mutually exclusive choices | Sequential steps. Use Steps |
+| Same example in N languages | Single canonical example. Just use a code block |
+| OS- or runtime-specific docs | Generic instructions. Keep them inline |
+
+<Callout type="warn" title="Retrieval note">
+  Each `<Tab>` content is part of the surrounding `<Chunk>`. Tabs do **not**
+  produce separate chunks per panel. Every panel's text is concatenated
+  into the parent chunk. Wrap each panel's prose in its own `<Chunk>` if
+  you need them indexed independently.
+</Callout>

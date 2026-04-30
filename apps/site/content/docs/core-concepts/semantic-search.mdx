@@ -1,0 +1,99 @@
+---
+title: "How semantic search works"
+description: "The doks retrieval pipeline end-to-end: extraction, embedding, storage, ranking."
+category: "core-concepts"
+tags: ["search", "retrieval", "embeddings", "sqlite-vec"]
+chunk_id: "docs-semantic-search"
+icon: "search"
+order: 3
+vector_metadata:
+  importance: 0.9
+  related_topics: ["chunks", "search-api", "ingest"]
+  code_languages: ["typescript", "sql"]
+---
+
+doks frames retrieval as **agentic RAG**: the question drives a reasoning loop that consults a vector index, a knowledge graph, and tooling, then self-evaluates before producing a final answer. The diagram below is the mental model. The pieces below explain how each box is realised in the codebase today.
+
+### <Chunk id="ss-pipeline" importance={0.95} tags={["pipeline", "agentic-rag", "overview"]}>The pipeline at a glance</Chunk>
+
+<div className="arag">
+  <div className="arag-prompt">Ask specific question?</div>
+  <div className="arag-step">Query</div>
+  <div className="arag-arrow" />
+  <div className="arag-step arag-agent">Reasoning Agent</div>
+  <div className="arag-arrow" />
+  <div className="arag-row">
+    <div className="arag-resource">Vector DB</div>
+    <div className="arag-plus">+</div>
+    <div className="arag-resource">Knowledge Graph</div>
+    <div className="arag-plus">+</div>
+    <div className="arag-resource">Tools</div>
+  </div>
+  <div className="arag-arrow" />
+  <div className="arag-step">Self-Evaluation</div>
+  <div className="arag-arrow" />
+  <div className="arag-step arag-final">Final Answer</div>
+  <div className="arag-caption">
+    <span className="arag-name">Agentic RAG</span>
+    <span className="arag-meta">Reasons · Adaptive step · Self-correcting</span>
+  </div>
+</div>
+
+The reasoning agent decides which resource to call next, accumulates evidence, and re-plans when a self-evaluation pass flags missing context. The vector index lives on disk (`sqlite-vec`); the knowledge graph and tool surface are pluggable.
+
+### <Chunk id="ss-embedding-model" importance={0.85} tags={["voyage", "embeddings", "dimensions"]}>The embedding model</Chunk>
+
+doks uses Voyage AI's `voyage-3-lite` model at 512 dimensions. The choice matters for three reasons:
+
+- **Dimension** is fixed at ingest time. The vec0 column is declared `float[512]`; changing dimensions means dropping and rebuilding the table.
+- **Input type matters.** Voyage exposes `document` and `query` modes; documents are embedded asymmetrically from queries to improve relevance. The ingest script passes `document`; the search route passes `query`.
+- **Page context helps.** The text sent to the embedder is `"# {pageTitle}\n## {heading}\n\n{text}"`, not the bare chunk body. Page-title context disambiguates similar bodies that live on different pages.
+
+To swap providers, change `lib/embed.ts` and re-ingest. The rest of the system doesn't care which embedder you used.
+
+### <Chunk id="ss-vec0-storage" importance={0.85} tags={["sqlite-vec", "vec0", "schema"]}>How vectors are stored</Chunk>
+
+`sqlite-vec` provides a `vec0` virtual table that stores fixed-dimension float vectors and answers k-NN queries with cosine distance. doks uses two tables:
+
+```sql
+CREATE TABLE chunks (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  chunk_id     TEXT UNIQUE NOT NULL,
+  page_href    TEXT NOT NULL,
+  page_title   TEXT NOT NULL,
+  heading      TEXT NOT NULL,
+  category     TEXT,
+  importance   REAL NOT NULL,
+  tags         TEXT NOT NULL,         -- JSON array
+  text         TEXT NOT NULL
+);
+
+CREATE VIRTUAL TABLE chunks_vec USING vec0(
+  embedding float[512]
+);
+```
+
+`chunks_vec.rowid` matches `chunks.id`. A one-to-one join. The vector table doesn't store any business metadata; the metadata table doesn't store any vectors. This split keeps the vec0 table small and lets you alter metadata columns without touching the index.
+
+### <Chunk id="ss-ranking" importance={0.9} tags={["ranking", "scoring", "importance"]}>Ranking and the importance boost</Chunk>
+
+A raw k-NN search returns the closest vectors, but "closest" doesn't always mean "most useful." Two chunks can be a 1% similarity apart while differing wildly in usefulness. Say, a real explanation versus a one-line cross-reference.
+
+doks asks for `topK * 2` candidates from vec0, then re-ranks them with:
+
+```typescript
+const sim   = 1 - distance / 2;                      // cosine in [0, 1]
+const score = sim + importanceWeight * (importance - 0.5);
+```
+
+The importance term shifts a chunk's score by up to ±0.075 (with the default `importanceWeight = 0.15`). That's enough to pull a 0.9-importance chunk past a same-topic 0.5-importance chunk when their similarities are close, and not enough to surface unrelated chunks just because the author flagged them.
+
+If you want pure cosine ranking, set `importanceWeight = 0` in the call to `vectorSearch`.
+
+### <Chunk id="ss-tradeoffs" importance={0.7} tags={["tradeoffs", "scaling"]}>Tradeoffs of this approach</Chunk>
+
+This pipeline is intentionally simple. What it gives up:
+
+- **Hybrid search.** Pure vector search misses exact keyword matches (function names, error codes). Add a BM25 pass over `chunks.text` and merge with reciprocal rank fusion if you need it.
+- **Streaming retrieval.** Results come back in one JSON payload, not as a stream. For a chat surface that calls `/api/docs/search` first and then streams an LLM response, the search call is fast enough (`<100ms` cold, `<20ms` warm) that streaming isn't worth the complexity.
+- **Distributed scale.** Everything lives in one SQLite file. Past ~100k chunks or write-heavy workloads, swap to Turso, Postgres + pgvector, or a managed vector DB. The `bm25Search`/`vectorSearch` interfaces in `lib/db.ts` are the only thing the rest of the app sees.

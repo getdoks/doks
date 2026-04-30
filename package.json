@@ -1,0 +1,43 @@
+{
+  "name": "doks",
+  "version": "0.1.0",
+  "//private": "TODO: remove in Phase 6 before npm publish",
+  "private": true,
+  "description": "Open-source, RAG-optimized documentation framework on Next.js + MDX. Bring your own keys, no SaaS layer.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "keywords": [
+    "docs",
+    "documentation",
+    "rag",
+    "mdx",
+    "nextjs",
+    "embeddings",
+    "sqlite-vec",
+    "ai"
+  ],
+  "homepage": "https://github.com/getdoks/doks",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/getdoks/doks.git"
+  },
+  "bugs": {
+    "url": "https://github.com/getdoks/doks/issues"
+  },
+  "license": "MIT",
+  "author": "<set in Phase 2 from site.config>",
+  "scripts": {
+    "dev": "npm run dev -w @doks/site",
+    "build": "npm run build -w doks-core && npm run build -w @doks/site",
+    "start": "npm run start -w @doks/site",
+    "lint": "npm run lint -w @doks/site",
+    "ingest": "npm run ingest -w @doks/site",
+    "typecheck": "npm run typecheck -w doks-core",
+    "test": "npm test -w create-doks"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

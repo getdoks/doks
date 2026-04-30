@@ -1,0 +1,212 @@
+---
+title: "MDX components"
+description: "Catalog of every component available inside an MDX page."
+category: "reference"
+tags: ["mdx", "components", "ui"]
+chunk_id: "docs-mdx-components"
+icon: "puzzle"
+order: 2
+vector_metadata:
+  importance: 0.8
+  related_topics: ["frontmatter", "writing-rag-friendly-mdx"]
+  code_languages: ["mdx", "tsx"]
+---
+
+These components are pre-registered for every MDX page by `doks-core`. Use them inline. No imports needed.
+
+> **Adding your own component** isn't a one-line change in v0.1: the framework owns the MDX `components` map inside `node_modules/doks-core`. To register a custom component, replace the thin re-export in `app/docs/[[...slug]]/page.tsx` with your own renderer that spreads `mdxComponents` from `doks-core` and adds yours on top. A proper extension API is on the roadmap.
+
+### <Chunk id="mc-chunk" importance={0.95} tags={["chunk", "rag"]}>`<Chunk>`</Chunk>
+
+The retrieval primitive. Wraps a section so the ingest pipeline picks it up as one row in the vector store. See [Chunks](/docs/core-concepts/chunks) for the full story.
+
+```mdx
+### <Chunk id="auth-jwt-flow" importance={0.95} tags={["jwt"]}>JWT issuance flow</Chunk>
+
+Body content here…
+```
+
+| Prop | Type | Required | Notes |
+|---|---|---|---|
+| `id` | string | yes | unique within the page |
+| `importance` | number `0–1` | no | retrieval boost (default 0.5) |
+| `tags` | `string[]` | no | filter metadata |
+
+### <Chunk id="mc-hero" importance={0.7} tags={["hero", "landing"]}>`<Hero>` and `<HeroButton>`</Chunk>
+
+Landing-page banner with eyebrow, title, description, and CTA buttons. When a page sets `eyebrow` in frontmatter, the page wrapper steps out of the way so a `<Hero>` can render full-bleed. For the full landing-page pattern (Hero + QJump grid), see [Landing pages](/docs/guides/landing-page).
+
+```mdx
+<Hero
+  eyebrow="Documentation · v0.1.0"
+  title="doks. RAG-optimized docs"
+  description="Markdown in, vector-ready chunks out."
+>
+  <HeroButton href="/docs/getting-started/quickstart">
+    Start in 5 minutes
+  </HeroButton>
+  <HeroButton href="/docs/core-concepts/chunks" variant="ghost">
+    Read the docs →
+  </HeroButton>
+</Hero>
+```
+
+`<HeroButton variant="ghost">` swaps the filled background for a bordered button.
+
+### <Chunk id="mc-qjump" importance={0.65} tags={["qjump", "navigation", "cards"]}>`<QJump>` and `<QCard>`</Chunk>
+
+Quick-jump grid for "where to next" sections. Most often used right below a `<Hero>` on landing pages. See the full pattern at [Landing pages](/docs/guides/landing-page).
+
+```mdx
+<QJump>
+  <QCard
+    href="/docs/getting-started/quickstart"
+    title="Quickstart"
+    description="Install + first ingest."
+  />
+  <QCard
+    href="/docs/core-concepts/chunks"
+    title="Chunks"
+    description="The retrieval unit."
+  />
+</QJump>
+```
+
+### <Chunk id="mc-callout" importance={0.75} tags={["callout", "admonition"]}>`<Callout>`</Chunk>
+
+Boxed inline guidance. Three variants: `tip`, `warn`, `note`.
+
+```mdx
+<Callout type="tip" title="Each chunk stands on its own.">
+  The retriever surfaces one chunk at a time. Every chunk needs enough context to be understood in isolation.
+</Callout>
+```
+
+### <Chunk id="mc-tabs" importance={0.65} tags={["tabs", "multi-language"]}>`<Tabs>` and `<Tab>`</Chunk>
+
+Switchable content panels. Common use: language alternatives for code samples. Same task, multiple SDKs.
+
+<Tabs>
+  <Tab label="cURL">
+
+```bash
+curl https://api.example.com/v1/search \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "vector search", "top_k": 5}'
+```
+
+  </Tab>
+  <Tab label="TypeScript">
+
+```typescript
+import { Datadistill } from "datadistill";
+
+const dd = new Datadistill({ apiKey: process.env.DD_API_KEY });
+const hits = await dd.search({ query: "vector search", topK: 5 });
+```
+
+  </Tab>
+  <Tab label="Python">
+
+```python
+from datadistill import Datadistill
+
+dd = Datadistill(api_key=os.environ["DD_API_KEY"])
+hits = dd.search(query="vector search", top_k=5)
+```
+
+  </Tab>
+  <Tab label="Go">
+
+```go
+client := datadistill.New(os.Getenv("DD_API_KEY"))
+hits, err := client.Search(ctx, datadistill.SearchOptions{
+    Query: "vector search",
+    TopK:  5,
+})
+```
+
+  </Tab>
+</Tabs>
+
+Source for the example above. Note the blank lines around each fence, which let MDX parse the code as block-level markdown inside JSX:
+
+````mdx
+<Tabs>
+  <Tab label="cURL">
+
+```bash
+curl https://api.example.com/v1/search \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{"query": "vector search"}'
+```
+
+  </Tab>
+  <Tab label="TypeScript">
+
+```typescript
+const dd = new Datadistill({ apiKey: process.env.DD_API_KEY });
+const hits = await dd.search({ query: "vector search" });
+```
+
+  </Tab>
+</Tabs>
+````
+
+For one-liners, an inline backtick span works too and skips the `<CodeBlock>` chrome:
+
+```mdx
+<Tabs>
+  <Tab label="TypeScript">
+    `const dd = new Datadistill({ apiKey: process.env.DD_API_KEY });`
+  </Tab>
+  <Tab label="Python">
+    `dd = Datadistill(api_key=os.environ["DD_API_KEY"])`
+  </Tab>
+</Tabs>
+```
+
+### <Chunk id="mc-steps" importance={0.7} tags={["steps", "procedural"]}>`<Steps>` and `<Step>`</Chunk>
+
+Numbered procedural lists. The number is auto-generated from order.
+
+```mdx
+<Steps>
+  <Step title="Install">Run `npm install`.</Step>
+  <Step title="Set a key">Add `VOYAGE_API_KEY` to `.env.local`.</Step>
+  <Step title="Ingest">Run `npm run ingest`.</Step>
+</Steps>
+```
+
+### <Chunk id="mc-codeblock" importance={0.6} tags={["code", "syntax-highlight"]}>`<CodeBlock>`</Chunk>
+
+Triple-backtick fences are auto-mapped to `<CodeBlock>` via the `pre` MDX component override. You rarely need to use the tag directly. Write fenced code:
+
+````mdx
+```typescript
+export function add(a: number, b: number) {
+  return a + b;
+}
+```
+````
+
+The language tag in the fence (`typescript` above) is forwarded to the syntax highlighter.
+
+### <Chunk id="mc-semantic-search" importance={0.85} tags={["semantic-search", "search", "embed"]}>`<SemanticSearch>`</Chunk>
+
+Drops a debounced search input + results list onto any page. Hits `/api/docs/search` under the hood.
+
+```mdx
+<SemanticSearch placeholder="Try: 'how do JWTs get refreshed?'" topK={4} />
+```
+
+| Prop | Type | Default | Notes |
+|---|---|---|---|
+| `placeholder` | string | `"Ask the docs anything…"` | input placeholder text |
+| `topK` | number | `5` | results to fetch (1–20) |
+| `inlineResults` | boolean | `true` | render results below the input. When `false`, supply `onResults` and render them yourself. |
+| `onResults` | `(results, query) => void` |. | callback for custom rendering |
+| `className` | string |. | extra class on the wrapper |
+
+See [Search API reference](/docs/reference/search-api) for the response shape.

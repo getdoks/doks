@@ -1,0 +1,103 @@
+---
+title: "Steps"
+description: "Numbered step lists for tutorials, onboarding flows, and multi-stage explanations."
+category: "samples"
+tags: ["steps", "tutorial", "walkthrough"]
+chunk_id: "samples-steps"
+icon: "list-ordered"
+order: 5
+vector_metadata:
+  importance: 0.55
+  related_topics: ["tutorial", "writing-rag-friendly-mdx"]
+---
+
+`<Steps>` renders an ordered list with large numerals and per-step bodies.
+Each `<Step>` accepts an optional `title` and any MDX content as children.
+
+### <Chunk id="steps-basic" importance={0.7} tags={["steps", "basic"]}>Basic. Title + body</Chunk>
+
+<Steps>
+  <Step title="Install dependencies">
+    Run `npm install` in your project root. The native `better-sqlite3`
+    binding will compile against your Node version.
+  </Step>
+  <Step title="Add an embedding key">
+    Copy `.env.example` to `.env.local` and paste your Voyage AI key.
+  </Step>
+  <Step title="Build the index">
+    Run `npm run ingest`. This walks `content/docs/`, splits each file into
+    chunks, embeds them, and writes `data/docs.db`.
+  </Step>
+  <Step title="Start the dev server">
+    Run `npm run dev`. The site is live at `http://localhost:3000`.
+  </Step>
+</Steps>
+
+```mdx
+<Steps>
+  <Step title="Install dependencies">
+    Run `npm install` in your project root.
+  </Step>
+  <Step title="Add an embedding key">
+    Copy `.env.example` to `.env.local` and paste your Voyage AI key.
+  </Step>
+  <Step title="Build the index">
+    Run `npm run ingest`.
+  </Step>
+  <Step title="Start the dev server">
+    Run `npm run dev`.
+  </Step>
+</Steps>
+```
+
+### <Chunk id="steps-with-code" importance={0.65} tags={["steps", "code", "tutorial"]}>Steps with embedded code</Chunk>
+
+Each step body can contain any MDX. Code blocks, lists, callouts, links.
+
+<Steps>
+  <Step title="Stage 01 · Scaffold">
+    Use the CLI to create a new project:
+
+    ```bash
+    npx create-doks my-docs
+    cd my-docs
+    ```
+  </Step>
+  <Step title="Stage 02 · Configure">
+    Edit `lib/site.config.ts` to set your brand:
+
+    ```ts
+    siteName: 'Acme Docs',
+    githubUrl: 'https://github.com/acme/docs',
+    ```
+  </Step>
+  <Step title="Stage 03 · Author">
+    Add an `.mdx` file under `content/docs/`. Wrap retrievable units in
+    `<Chunk id="…">`. See [chunk authoring](/docs/core-concepts/chunks).
+  </Step>
+  <Step title="Stage 04 · Ship">
+    `npm run build && npm run start`. Or push to Vercel with `npx vercel --prod`.
+  </Step>
+</Steps>
+
+### <Chunk id="steps-no-title" importance={0.45} tags={["steps", "minimal"]}>Steps without titles</Chunk>
+
+The `title` prop is optional. Drop it for terse, single-paragraph steps.
+
+<Steps>
+  <Step>Open your terminal in the project root.</Step>
+  <Step>Run `npm run ingest`.</Step>
+  <Step>Run `npm run dev`.</Step>
+  <Step>Open `http://localhost:3000` in your browser.</Step>
+</Steps>
+
+### <Chunk id="steps-when" importance={0.45} tags={["steps", "guidance"]}>When to use steps</Chunk>
+
+| Use it for | Skip it for |
+| --- | --- |
+| Sequential walkthroughs | Parallel options. Use Tabs |
+| Numbered procedures | Reference material. Use a list |
+| Onboarding flows | Concept explanations. Use prose |
+
+For non-sequential lists where order doesn't matter, use a regular markdown
+unordered list (`- item`) instead of `<Steps>`.

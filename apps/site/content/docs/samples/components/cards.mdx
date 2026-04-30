@@ -1,0 +1,118 @@
+---
+title: "Cards (QJump / QCard)"
+description: "Quick-jump card grids for landing-style navigation."
+category: "samples"
+tags: ["cards", "qjump", "qcard", "navigation"]
+chunk_id: "samples-cards"
+icon: "grid"
+order: 3
+vector_metadata:
+  importance: 0.55
+  related_topics: ["banners", "landing-page", "frontmatter"]
+---
+
+`<QJump>` is a CSS grid wrapper. `<QCard>` is a clickable tile inside it.
+Together they're the workhorse pattern for landing pages and section indexes.
+
+### <Chunk id="cards-four" importance={0.65} tags={["qjump", "qcard", "grid"]}>Four-up grid</Chunk>
+
+The classic landing-page layout. Four cards laid out responsively. Full row
+on desktop, two-up on tablet, stacked on mobile.
+
+<QJump>
+  <QCard
+    href="/docs/getting-started/quickstart"
+    title="Five-minute start"
+    description="Scaffold, ingest, and serve your first doc page in under five minutes."
+  />
+  <QCard
+    href="/docs/core-concepts/chunks"
+    title="Chunk authoring"
+    description="The retrieval primitive. Learn what makes a chunk searchable."
+  />
+  <QCard
+    href="/docs/reference/site-config"
+    title="Site config"
+    description="Every brand string in one file. Type-checked, no scattered constants."
+  />
+  <QCard
+    href="/docs/getting-started/upgrade"
+    title="Upgrades"
+    description="One command to bump the framework and run any pending migrations."
+  />
+</QJump>
+
+```mdx
+<QJump>
+  <QCard
+    href="/docs/getting-started/quickstart"
+    title="Five-minute start"
+    description="Scaffold, ingest, and serve your first doc page in under five minutes."
+  />
+  <QCard
+    href="/docs/core-concepts/chunks"
+    title="Chunk authoring"
+    description="The retrieval primitive. Learn what makes a chunk searchable."
+  />
+  <QCard
+    href="/docs/reference/site-config"
+    title="Site config"
+    description="Every brand string in one file. Type-checked, no scattered constants."
+  />
+  <QCard
+    href="/docs/getting-started/upgrade"
+    title="Upgrades"
+    description="One command to bump the framework and run any pending migrations."
+  />
+</QJump>
+```
+
+### <Chunk id="cards-two" importance={0.55} tags={["qjump", "qcard", "two-up"]}>Two-card path picker</Chunk>
+
+For "tutorial vs reference" or "new user vs returning user" splits.
+
+<QJump>
+  <QCard
+    href="/docs/getting-started/quickstart"
+    title="I want to try it"
+    description="Walk through the quickstart with the demo corpus already in place."
+  />
+  <QCard
+    href="/docs/getting-started/install"
+    title="I'm starting a real project"
+    description="Use the create-doks CLI and customize site.config.ts from the start."
+  />
+</QJump>
+
+```mdx
+<QJump>
+  <QCard href="/docs/getting-started/quickstart" title="I want to try it" description="…" />
+  <QCard href="/docs/getting-started/install"   title="I'm starting a real project" description="…" />
+</QJump>
+```
+
+### <Chunk id="cards-external" importance={0.5} tags={["qjump", "qcard", "external"]}>Mixing internal and external links</Chunk>
+
+`href` accepts any URL. Cards inside a single `<QJump>` can link anywhere:
+internal slugs, deep links to a section, or off-site references.
+
+<QJump>
+  <QCard
+    href="/docs/reference/search-api"
+    title="Search API"
+    description="POST /api/docs/search. Request shape, response shape, ranking."
+  />
+  <QCard
+    href="https://github.com/getdoks/doks"
+    title="Source on GitHub"
+    description="One Next.js + workspace repo. Read it, fork it, ship it."
+  />
+</QJump>
+
+### <Chunk id="cards-when" importance={0.45} tags={["qjump", "guidance"]}>When to use cards</Chunk>
+
+| Use it for | Skip it for |
+| --- | --- |
+| Section landing pages | Inline references. Use a markdown link |
+| 3–6 sibling links | More than 6. Use a sidebar or nested page |
+| Equally important destinations | Hierarchical structure. Use Steps |

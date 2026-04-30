@@ -1,0 +1,146 @@
+---
+title: "Site config"
+description: "Every field in lib/site.config.ts. Type, default, purpose."
+category: "reference"
+tags: ["config", "branding", "site-config", "logo", "favicon"]
+chunk_id: "docs-site-config"
+icon: "settings"
+order: 5
+vector_metadata:
+  importance: 0.8
+  related_topics: ["install", "themes", "header"]
+  code_languages: ["typescript"]
+---
+
+`lib/site.config.ts` is where your project's brand strings live. It implements
+the `SiteConfig` interface exported from `doks-core`. Everything visible in the
+header chrome flows from this one file: the logo, the wordmark, the pill next
+to it, the "Ask the docs" button label, the CTA, the GitHub link.
+
+### <Chunk id="site-config-shape" importance={0.9} tags={["config"]}>Shape</Chunk>
+
+```ts
+import type { SiteConfig } from 'doks-core';
+
+export const siteConfig: SiteConfig = {
+  siteName: 'My Docs',
+  logoText: 'My Docs',
+  logoSrc: '/logo.svg',
+  logoSrcDark: '/logo-dark.svg',
+  logoAlt: 'My Docs',
+  logoTag: 'Documentation',
+  description: 'Documentation for My Project.',
+  githubUrl: 'https://github.com/your-org/your-repo',
+  ctaLabel: 'Start free',
+  ctaUrl: 'https://github.com/your-org/your-repo',
+  changelogUrl: undefined,
+  chatLabel: 'Ask the docs',
+  defaultTheme: 'light',
+  showUpdatedBadge: true,
+};
+
+export default siteConfig;
+```
+
+### <Chunk id="site-config-fields" importance={0.85} tags={["config", "fields"]}>Fields</Chunk>
+
+| Field | Type | Required | Purpose |
+| --- | --- | --- | --- |
+| `siteName` | `string` | yes | Brand name. Used in `<title>` and as the default `logoAlt`. |
+| `logoText` | `string` | yes | Text shown next to the lettermark when no `logoSrc` is set. Fallback only. |
+| `logoSrc` | `string \| undefined` | no | URL or `/`-rooted path to a logo image. When set, replaces the lettermark + `logoText` with an `<img>`. |
+| `logoSrcDark` | `string \| undefined` | no | Optional dark-theme variant. Falls back to `logoSrc` if unset. |
+| `logoAlt` | `string \| undefined` | no | Alt text for the logo image. Defaults to `siteName`. |
+| `logoTag` | `string \| undefined` | no | Pill label beside the logo (e.g. `Documentation`). `undefined` hides the pill. |
+| `description` | `string` | yes | `<meta name="description">` content. |
+| `githubUrl` | `string` | yes | Header GitHub icon link. |
+| `ctaLabel` | `string \| undefined` | no | Primary CTA button label. `undefined` hides the button. |
+| `ctaUrl` | `string \| undefined` | no | CTA button href. |
+| `changelogUrl` | `string \| undefined` | no | Header "Changelog" link. `undefined` hides it. |
+| `chatLabel` | `string` | yes | Label on the chat toggle (e.g. `Ask the docs`). |
+| `defaultTheme` | `'light' \| 'dark' \| 'blue-pearl' \| 'sand'` | yes | Theme applied before JS runs (via `data-theme`). |
+| `showUpdatedBadge` | `boolean` | yes | Whether to render the "Updated …" badge in the header. |
+
+### <Chunk id="site-config-logo" importance={0.85} tags={["config", "logo", "branding"]}>Swapping the logo</Chunk>
+
+Two patterns:
+
+**1. Wordmark image**. Drop your SVG/PNG into `apps/site/public/`, then point
+`logoSrc` at it. Provide a `logoSrcDark` if the colours don't survive a theme
+flip:
+
+```ts
+logoSrc: '/logo.svg',
+logoSrcDark: '/logo-dark.svg',
+logoAlt: 'My Docs',
+```
+
+The `<img>` tag is sized to 28 px tall in the header; width is auto. Aspect
+ratio is preserved.
+
+**2. Lettermark fallback**. If you don't set `logoSrc`, the framework renders
+a 28 × 28 brand-gradient tile with the first letter of `logoText`, followed by
+the full `logoText` as a wordmark. No image to author, but no real logo
+either:
+
+```ts
+// logoSrc unset
+logoText: 'Acme',
+```
+
+In both modes the optional pill (`logoTag`) sits to the right of the logo. To
+hide it, set `logoTag: undefined`.
+
+### <Chunk id="site-config-favicon" importance={0.7} tags={["config", "favicon", "metadata"]}>Favicon (lives outside `siteConfig`)</Chunk>
+
+The favicon isn't part of `siteConfig`. It's wired through Next's metadata
+in `apps/site/app/layout.tsx`. Drop your icon into `apps/site/public/` and
+reference it from the layout:
+
+```ts
+// apps/site/app/layout.tsx
+export const metadata: Metadata = {
+  // ...
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+  },
+};
+```
+
+For an **adaptive favicon** that flips on the OS dark/light setting, embed a
+`prefers-color-scheme` media query inside the SVG itself:
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="...">
+  <style>
+    .letter { fill: #1B1B1B; }
+    @media (prefers-color-scheme: dark) {
+      .letter { fill: #FAFAFA; }
+    }
+  </style>
+  <path class="letter" d="..." />
+</svg>
+```
+
+One file, both themes. Works in Chrome, Safari, and Firefox.
+
+### <Chunk id="site-config-mdx" importance={0.6} tags={["config", "mdx", "components"]}>Using config in MDX</Chunk>
+
+The framework registers `<SiteName />` and `<GithubUrl />` MDX components that
+inline the corresponding fields. Use them in prose where the site name or repo
+URL appears, so a single config edit updates every page:
+
+```mdx
+Welcome to <SiteName />. Source on <GithubUrl />.
+```
+
+### <Chunk id="site-config-where" importance={0.55} tags={["config", "files", "location"]}>Where the file lives</Chunk>
+
+| Path | What it is |
+| --- | --- |
+| `apps/site/lib/site.config.ts` | Your project's brand config. **Edit this.** |
+| `packages/doks-core/src/lib/defaultConfig.ts` | Framework default. Only used if a consumer renders `<Header />` standalone without supplying a `siteConfig` prop (e.g. in tests). Don't edit unless you're contributing to the framework. |
+
+The site config flows through `app/layout.tsx` → `<DocsShell siteConfig={…}>`
+→ `<Header siteConfig={…}>`. Editing the file and saving triggers a hot
+reload. No rebuild needed.

@@ -1,0 +1,86 @@
+---
+title: "Chunks"
+description: "What a chunk is, how the <Chunk> tag works, and how chunks become rows in the vector store."
+category: "core-concepts"
+tags: ["chunks", "rag", "extraction"]
+chunk_id: "docs-chunks"
+icon: "puzzle"
+order: 2
+vector_metadata:
+  importance: 0.95
+  related_topics: ["semantic-search", "frontmatter", "writing-rag-friendly-mdx"]
+  code_languages: ["mdx", "typescript"]
+---
+
+A chunk is the smallest unit doks retrieves. Pages exist for humans; chunks exist for the retriever. Most of the choices you make as an author. Heading structure, chunk size, importance. Are choices about how the retriever should see your prose.
+
+### <Chunk id="ch-what-is-a-chunk" importance={0.95} tags={["definition", "rag"]}>What a chunk is</Chunk>
+
+A chunk is a contiguous piece of MDX content with three things attached:
+
+- A **stable id**. The primary key in the vector store. Renaming an id orphans its embedding.
+- An **importance** in `[0, 1]`. Multiplied into ranking so author-flagged "must surface" chunks beat marginally-closer noise.
+- **Tags**. String filters the retriever can use later (e.g. `["jwt", "auth"]`).
+
+When the retriever surfaces a chunk to an LLM, the surrounding page is **not** in the prompt. Each chunk has to make sense on its own. See [Writing RAG-friendly MDX](/docs/guides/writing-rag-friendly-mdx) for the rules.
+
+### <Chunk id="ch-the-tag" importance={0.95} tags={["chunk-tag", "syntax"]}>The `<Chunk>` tag</Chunk>
+
+Wrap each retrievable section in a `<Chunk>` tag. The most common form puts the tag inside the heading line so the heading becomes the chunk title:
+
+```mdx
+### <Chunk id="auth-jwt-flow" importance={0.95} tags={["jwt", "flow"]}>JWT issuance flow</Chunk>
+
+When a user signs in, the identity provider returns an authorization code. The doks server
+exchanges that code for an access token and an opaque refresh token, …
+```
+
+The text **after** the closing `</Chunk>` and **before** the next `<Chunk>` (or end of file) is captured as the chunk's body. You don't need to wrap the body itself. Only the heading.
+
+Attribute syntax matches JSX:
+
+| Attribute | Type | Default | Meaning |
+|---|---|---|---|
+| `id` | string (required) |. | unique within the page |
+| `importance` | number `0–1` | `0.5` | retrieval boost |
+| `tags` | `string[]` | `[]` | filter metadata |
+
+### <Chunk id="ch-id-stability" importance={0.85} tags={["id", "stability", "embeddings"]}>Why chunk ids are sticky</Chunk>
+
+The full key in the vector store is `{page_chunk_id}:{local_id}`. The `page_chunk_id` comes from the file's frontmatter; the `local_id` is the `id` you passed to the `<Chunk>` tag.
+
+If you rename `auth-jwt-flow` to `jwt-issuance`, the next ingest deletes the old row and inserts a new one with a fresh embedding. Any external system that pinned the old id (a saved citation, an analytics dashboard, a deep link) breaks.
+
+Treat ids the same way you treat URL slugs: pick once, live with it.
+
+### <Chunk id="ch-without-chunk-tags" importance={0.7} tags={["fallback", "headings"]}>Pages without `<Chunk>` tags</Chunk>
+
+When an MDX file has no `<Chunk>` tags, doks falls back to splitting on `##` and `###` markdown headings. Each heading becomes a chunk; the chunk's `local_id` is a slug of the heading text.
+
+This is fine for a first draft, but author-controlled `<Chunk>` tags are always better:
+
+- The body the retriever sees matches what you intended
+- You can tune `importance` per section
+- Renaming a heading doesn't rotate the id
+
+### <Chunk id="ch-lifecycle" importance={0.8} tags={["pipeline", "ingest"]}>Lifecycle of a chunk</Chunk>
+
+From file to retrieval result, a chunk goes through five steps:
+
+<Steps>
+  <Step title="Extract">
+    `lib/chunks.ts` reads each `.mdx`, strips Hero/QJump/code fences, and produces an `ExtractedChunk[]`.
+  </Step>
+  <Step title="Embed">
+    `lib/embed.ts` batches up to 32 chunks per Voyage API call. The embedding input is `"# {pageTitle}\n## {heading}\n\n{text}"`. Page title context helps the embedder disambiguate similar bodies on different pages.
+  </Step>
+  <Step title="Store">
+    `lib/db.ts` writes metadata to `chunks` and the embedding to `chunks_vec` (a sqlite-vec virtual table). Both rows share a rowid.
+  </Step>
+  <Step title="Retrieve">
+    The search route embeds the user's query with `input_type="query"`, then asks `chunks_vec` for the top-k nearest by cosine distance.
+  </Step>
+  <Step title="Re-rank">
+    Cosine similarity is converted to `[0, 1]` and combined with `0.15 * (importance - 0.5)` so important chunks float up.
+  </Step>
+</Steps>

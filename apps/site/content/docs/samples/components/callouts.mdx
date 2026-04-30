@@ -1,0 +1,111 @@
+---
+title: "Callouts"
+description: "Inline note, tip, and warning blocks for highlighting important information."
+category: "samples"
+tags: ["callout", "note", "tip", "warning"]
+chunk_id: "samples-callouts"
+icon: "alert"
+order: 2
+vector_metadata:
+  importance: 0.55
+  related_topics: ["mdx-components", "writing-rag-friendly-mdx"]
+---
+
+`<Callout>` is a side-bar-style block for information that should stand out
+from the surrounding prose. Three types ship with the framework:
+
+- `note` (default). Neutral information
+- `tip`. Helpful suggestions
+- `warn`. Gotchas, edge cases, breakage warnings
+
+### <Chunk id="callouts-note" importance={0.6} tags={["callout", "note"]}>Note (default)</Chunk>
+
+<Callout type="note" title="Note">
+  The default callout type is `note`. If you don't pass `type=`, this is what
+  you get. Neutral information that should pop out of the prose flow.
+</Callout>
+
+```mdx
+<Callout type="note" title="Note">
+  Neutral information that should pop out of the prose flow.
+</Callout>
+```
+
+### <Chunk id="callouts-tip" importance={0.65} tags={["callout", "tip"]}>Tip</Chunk>
+
+<Callout type="tip" title="Authoring tip">
+  Wrap each callout's *body content* in `<Chunk>` if you want it returned by
+  semantic search as a discrete unit. Otherwise it's folded into the parent
+  page chunk.
+</Callout>
+
+```mdx
+<Callout type="tip" title="Authoring tip">
+  Wrap each callout's body in <Chunk> if you want it independently retrievable.
+</Callout>
+```
+
+### <Chunk id="callouts-warn" importance={0.7} tags={["callout", "warn", "warning"]}>Warning</Chunk>
+
+<Callout type="warn" title="Don't ship this">
+  The deterministic hash embedder is **not** semantically meaningful. It runs
+  end-to-end so you can verify the schema, but search results will be useless.
+  Production deployments need a real `VOYAGE_API_KEY`.
+</Callout>
+
+```mdx
+<Callout type="warn" title="Don't ship this">
+  The hash embedder is not semantically meaningful. Production needs VOYAGE_API_KEY.
+</Callout>
+```
+
+### <Chunk id="callouts-no-title" importance={0.45} tags={["callout"]}>Without a title</Chunk>
+
+The `title` prop is optional. Drop it for terse, single-line callouts:
+
+<Callout type="tip">
+  Use `npx doks upgrade --dry-run` first to preview which migrations would
+  run before you commit.
+</Callout>
+
+```mdx
+<Callout type="tip">
+  Use `npx doks upgrade --dry-run` to preview migrations.
+</Callout>
+```
+
+### <Chunk id="callouts-multi-block" importance={0.5} tags={["callout", "advanced"]}>Multi-block content</Chunk>
+
+Callouts can wrap rich content. Code, lists, links, even other components.
+
+<Callout type="note" title="What you need before you ingest">
+
+Three things, all optional for first-run:
+
+1. A `VOYAGE_API_KEY` for real embeddings.
+2. A chat provider key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) for the chat panel.
+3. At least one `.mdx` file under `content/docs/`.
+
+```bash
+echo "VOYAGE_API_KEY=pa-..." >> .env.local
+npm run ingest
+```
+
+</Callout>
+
+````mdx
+<Callout type="note" title="What you need before you ingest">
+
+Three things, all optional for first-run:
+
+1. A `VOYAGE_API_KEY` for real embeddings.
+2. A chat provider key for the chat panel.
+3. At least one `.mdx` file.
+
+```bash
+echo "VOYAGE_API_KEY=pa-..." >> .env.local
+npm run ingest
+```
+
+</Callout>
+````

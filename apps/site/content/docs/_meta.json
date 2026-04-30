@@ -1,0 +1,10 @@
+{
+  "overview":           { "order": 0 },
+  "samples":            { "label": "Samples",         "order": 1 },
+  "samples/components": { "label": "Components",      "order": 1 },
+  "samples/archetypes": { "label": "Archetypes",      "order": 2 },
+  "getting-started":    { "label": "Getting Started", "order": 2 },
+  "core-concepts":      { "label": "Core Concepts",   "order": 3 },
+  "guides":             { "label": "Guides",          "order": 4 },
+  "reference":          { "label": "Reference",       "order": 5 }
+}

@@ -1,0 +1,207 @@
+---
+title: "Upgrade"
+description: "Bump doks-core and run any pending migrations with a single command."
+category: "getting-started"
+tags: ["upgrade", "cli", "migrations", "doks-core"]
+chunk_id: "docs-upgrade"
+icon: "arrow-up"
+order: 4
+vector_metadata:
+  importance: 0.7
+  related_topics: ["install", "migrations", "site-config"]
+  code_languages: ["bash", "javascript", "json"]
+---
+
+`doks upgrade` bumps the `doks-core` package to the latest published version
+and runs any framework-authored migration scripts that adapt your project to
+the new release. The `doks` bin ships with `doks-core`, so you get it for
+free in any project that has the package installed.
+
+<Callout type="tip" title="Roughly equivalent to">
+  `npm install doks-core@latest` plus an automated `git diff`-style adjustment
+  of your project files for any breaking changes. Without `doks upgrade`, you
+  would need to read the changelog and apply those adjustments by hand.
+</Callout>
+
+### <Chunk id="upgrade-run" importance={0.9} tags={["upgrade", "cli"]}>Run</Chunk>
+
+From your project root:
+
+```bash
+npx doks upgrade
+```
+
+What happens, in order:
+
+<Steps>
+  <Step title="Read your installed version">
+    The CLI looks at `package.json` and reads the version pinned for
+    `doks-core` in `dependencies`.
+  </Step>
+  <Step title="Look up the latest release">
+    Runs `npm view doks-core version` against your registry mirror.
+  </Step>
+  <Step title="Install the new version">
+    Runs `npm install doks-core@<latest>`. Any peer-dependency adjustments
+    (Next.js, React) are surfaced as standard npm warnings.
+  </Step>
+  <Step title="Apply pending migrations">
+    Walks `node_modules/doks-core/migrations/` and runs every script whose
+    target version is greater than your previous version, in semver order.
+    Each migration prints a one-line summary of what it changed.
+  </Step>
+</Steps>
+
+If you're already on the latest, the CLI prints `Already up to date.` and
+exits without touching anything.
+
+### <Chunk id="upgrade-output" importance={0.7} tags={["upgrade", "output"]}>What success looks like</Chunk>
+
+```
+$ npx doks upgrade
+current: 0.1.0  latest: 0.3.2
+Installing…
++ doks-core@0.3.2
+Running migration 0.2.0…
+  + added analyticsKey to site.config.ts
+Running migration 0.3.0…
+  + renamed chatLabel to askLabel in site.config.ts
+Done.
+```
+
+Each migration prints `+ <change>` lines so you have a record of what was
+touched. Inspect the diff with `git diff` before committing.
+
+### <Chunk id="upgrade-dry-run" importance={0.75} tags={["upgrade", "dry-run", "preview"]}>Preview without applying</Chunk>
+
+Use `--dry-run` to see which migrations would run without installing anything:
+
+```bash
+npx doks upgrade --dry-run
+```
+
+```
+current: 0.1.0  latest: 0.3.2
+Would run 2 migration(s): [ '0.2.0', '0.3.0' ]
+```
+
+This is the safe way to scout a multi-version jump before you commit a
+working tree to it.
+
+### <Chunk id="upgrade-after" importance={0.7} tags={["upgrade", "review", "diff"]}>After the upgrade</Chunk>
+
+Three things are worth doing every time:
+
+1. **Read the diff.**
+   ```bash
+   git diff
+   ```
+   Migrations should only touch user-owned files (typically `lib/`,
+   `app/layout.tsx`, occasionally MDX frontmatter). If you see edits to
+   `node_modules/`, that's a bug. Please file an issue.
+
+2. **Re-run ingest.**
+   ```bash
+   npm run ingest
+   ```
+   If the migration changed the chunk extractor, frontmatter shape, or
+   embedding model, your existing `data/docs.db` is stale.
+
+3. **Boot the dev server.**
+   ```bash
+   npm run dev
+   ```
+   Click through your most-trafficked pages and make sure nothing visibly
+   regressed. The Spotlight (⌘K) search is a good smoke test for the index.
+
+### <Chunk id="upgrade-rollback" importance={0.65} tags={["upgrade", "rollback"]}>Rolling back</Chunk>
+
+There is no `doks downgrade`. The supported rollback path is git:
+
+```bash
+git restore -SW .
+npm install doks-core@<previous-version>
+npm run ingest
+```
+
+Migrations are required to be **idempotent**. Re-running `doks upgrade`
+after a partial rollback is safe. If a migration has external side effects
+(rare, and discouraged), the migration's source in
+`node_modules/doks-core/migrations/<version>.js` documents how to reverse them.
+
+### <Chunk id="upgrade-multi-major" importance={0.6} tags={["upgrade", "major", "multi-version"]}>Crossing major versions</Chunk>
+
+`doks upgrade` runs every intervening migration, so a 0.1 → 0.7 jump
+applies six migrations in sequence. Two practices help:
+
+<Tabs>
+  <Tab label="Stage the jump">
+    Pin to one major at a time, run the migration, commit, then repeat:
+
+    ```bash
+    npm install doks-core@0.2.x && npx doks upgrade
+    git commit -am "upgrade doks-core to 0.2"
+
+    npm install doks-core@0.3.x && npx doks upgrade
+    git commit -am "upgrade doks-core to 0.3"
+    ```
+
+    This keeps each commit reviewable.
+  </Tab>
+  <Tab label="Take it in one go">
+    For greenfield projects with no production traffic:
+
+    ```bash
+    npx doks upgrade
+    git diff   # review every migration's combined output
+    ```
+
+    Faster, but the diff is harder to read.
+  </Tab>
+</Tabs>
+
+### <Chunk id="upgrade-troubleshooting" importance={0.7} tags={["upgrade", "troubleshooting", "errors"]}>Troubleshooting</Chunk>
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| `'doks-core' not found in dependencies` | The CLI was run outside a project, or `doks-core` was hoisted to a parent workspace. | `cd` into the project that has it, or pass `--cwd <path>`. |
+| `Failed to fetch latest version (offline?)` | `npm view` couldn't reach the registry. | Check network access, or set `npm config set registry <mirror>`. |
+| Migration prints nothing and exits 0 | The migration was already applied (idempotent no-op). | Confirm with `git status`. If you expected changes, check the migration source. |
+| Build fails after upgrade | Cached `.next/` or stale `data/docs.db`. | `rm -rf .next data/docs.db && npm run ingest && npm run build` |
+
+<Callout type="warn" title="Don't skip migrations">
+  Pinning `doks-core` to the latest manually (`npm install doks-core@latest`)
+  installs the package but **does not** run migrations. Your project will
+  build but produce subtly broken output until you run `npx doks upgrade` to
+  catch up. The CLI detects mismatches like this and reapplies pending
+  migrations on its next run.
+</Callout>
+
+### <Chunk id="upgrade-cli-help" importance={0.5} tags={["upgrade", "help", "cli"]}>CLI reference</Chunk>
+
+```
+$ doks --help
+
+doks. Framework CLI
+
+Usage:
+  doks upgrade [--dry-run]   Bump doks-core to the latest npm version and
+                             run any pending migrations.
+  doks --help                Show this help.
+
+Run inside a project that has 'doks-core' as a dependency.
+```
+
+| Command | Purpose |
+| --- | --- |
+| `doks upgrade` | Bump and run pending migrations. |
+| `doks upgrade --dry-run` | Preview which migrations would run. |
+| `doks --help` | Print usage. |
+
+### <Chunk id="upgrade-author-migration" importance={0.55} tags={["upgrade", "migrations", "contributors"]}>Authoring a migration (framework contributors)</Chunk>
+
+If you're working on `doks-core` itself and need to ship a breaking change,
+add a migration script under `packages/doks-core/migrations/<target>.js`.
+Migrations are short, idempotent, and edit user-owned files only. See
+[Migrations reference](/docs/reference/migrations) for the policy and a full
+example.

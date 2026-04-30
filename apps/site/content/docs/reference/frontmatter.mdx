@@ -1,0 +1,94 @@
+---
+title: "Frontmatter reference"
+description: "Every YAML field doks reads from an MDX file's frontmatter."
+category: "reference"
+tags: ["frontmatter", "yaml", "schema"]
+chunk_id: "docs-frontmatter"
+icon: "list"
+order: 1
+vector_metadata:
+  importance: 0.85
+  related_topics: ["chunks", "writing-rag-friendly-mdx"]
+  code_languages: ["yaml"]
+---
+
+Every MDX file in `content/docs/` opens with a YAML block. doks reads it once at build time to populate the sidebar, the right-rail TOC, the page metadata, and the per-chunk metadata stored in the vector index.
+
+### <Chunk id="fm-required" importance={0.95} tags={["required", "fields"]}>Required fields</Chunk>
+
+Three fields are required. The page renders if they're missing, but the result is messy. Title falls back to the slug, retrieval scoring uses defaults, and the sidebar entry is unlabelled.
+
+```yaml
+---
+title: "Authentication overview"
+description: "How authentication works in doks."
+chunk_id: "docs-auth-overview"
+---
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `title` | string | Page heading and retrieval result label. |
+| `description` | string | One sentence. Indexed alongside the body and shown under the heading. |
+| `chunk_id` | string | Globally unique. Forms the prefix of every chunk id on the page (`{chunk_id}:{local}`). Kebab-case, prefixed with `docs-`. |
+
+### <Chunk id="fm-presentation" importance={0.75} tags={["presentation", "sidebar", "icon"]}>Presentation fields</Chunk>
+
+Optional fields that change how the page is displayed.
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `category` | string | derived from path | Coarse grouping shown in the spotlight result. |
+| `order` | number | `999` | Sidebar sort order within a directory. Lower values appear first. |
+| `icon` | string | none | Left-sidebar icon name (e.g. `lock`, `book`, `bolt`). |
+| `eyebrow` | string | none | When set, the page renders in "hero mode". No auto-generated title or `sec-lead`. Use this for landing pages that supply their own `<Hero>`. |
+| `badge` | `{ label, variant }` | none | Small pill next to the sidebar entry, e.g. `{ label: "new", variant: "new" }`. |
+
+### <Chunk id="fm-tags" importance={0.85} tags={["tags", "retrieval"]}>Tags</Chunk>
+
+```yaml
+tags: ["auth", "jwt", "session", "security"]
+```
+
+`tags` is a flat array of 3–7 retrieval keywords. They're stored as JSON on every chunk extracted from the page and surfaced in the search API response so a frontend can render filter chips or tag badges.
+
+Aim for terms a user might type into search but not necessarily use in prose ("oauth" if your prose says "identity provider"). They are not used for full-text matching.
+
+### <Chunk id="fm-vector-metadata" importance={0.9} tags={["vector_metadata", "importance", "retrieval"]}>`vector_metadata`</Chunk>
+
+Controls how the page-level fallback chunks are weighted, and provides hints the retriever and downstream consumers can use.
+
+```yaml
+vector_metadata:
+  importance: 0.9
+  related_topics: ["oauth", "rbac", "api-keys"]
+  code_languages: ["typescript", "python"]
+```
+
+| Subfield | Type | Default | Notes |
+|---|---|---|---|
+| `importance` | number `0–1` | `0.5` | Default importance for chunks on this page that don't set it themselves. Re-ranked into the search score. |
+| `related_topics` | `string[]` | `[]` | Hints for cross-linking and "see also" surfaces. Not indexed. |
+| `code_languages` | `string[]` | `[]` | Filter metadata for code-snippet retrieval. Not indexed. |
+
+Per-chunk `<Chunk importance={…} tags={[…]}>` always wins over `vector_metadata` defaults.
+
+### <Chunk id="fm-full-example" importance={0.7} tags={["example", "complete"]}>A complete example</Chunk>
+
+```yaml
+---
+title: "Authentication overview"
+description: "How authentication works in doks. JWT issuance, session lifecycle, and integration points."
+category: "core-concepts"
+tags: ["auth", "jwt", "session", "security"]
+chunk_id: "docs-auth-overview"
+icon: "lock"
+order: 1
+vector_metadata:
+  importance: 0.9
+  related_topics: ["oauth", "rbac", "api-keys"]
+  code_languages: ["typescript", "python"]
+---
+```
+
+Copy this block when you start a new page and edit the values to match.

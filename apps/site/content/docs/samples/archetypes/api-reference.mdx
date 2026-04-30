@@ -1,0 +1,192 @@
+---
+title: "Archetype. API reference"
+description: "A complete API-reference archetype showing tabs, code blocks, parameter tables, and response shapes."
+category: "samples"
+tags: ["archetype", "api", "reference", "template"]
+chunk_id: "samples-archetype-api"
+icon: "api"
+order: 9
+vector_metadata:
+  importance: 0.6
+  related_topics: ["tabs", "code-blocks", "search-api"]
+  code_languages: ["bash", "javascript", "python", "typescript", "json"]
+---
+
+This is a worked example of the **API-reference archetype**: terse, dense,
+exhaustive. Each endpoint gets one section with its method, path, parameters,
+example calls in three languages, and the response shape.
+
+The fictional product here is "Acme Stacks API". Replace with your own.
+
+### <Chunk id="api-base" importance={0.7} tags={["base-url", "auth"]}>Base URL & authentication</Chunk>
+
+| Environment | Base URL |
+| --- | --- |
+| Production | `https://api.acme.example/v2` |
+| Staging | `https://staging-api.acme.example/v2` |
+| Local mock | `http://localhost:8080/v2` |
+
+All endpoints require a bearer token in the `Authorization` header:
+
+```bash
+Authorization: Bearer acme_live_…
+```
+
+### <Chunk id="api-list-stacks" importance={0.85} tags={["endpoint", "list", "stacks"]}>`GET /stacks`. List stacks</Chunk>
+
+Returns every stack visible to the authenticated principal, paginated.
+
+#### Parameters
+
+| Param | In | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `limit` | query | integer | no | 25 | Max items per page (1–100) |
+| `cursor` | query | string | no |. | Pagination cursor from previous response |
+| `region` | query | string | no |. | Filter by region (e.g. `us-east-1`) |
+
+#### Examples
+
+<Tabs>
+  <Tab label="cURL">
+    ```bash
+    curl -X GET 'https://api.acme.example/v2/stacks?limit=10&region=us-east-1' \
+      -H 'Authorization: Bearer acme_live_…'
+    ```
+  </Tab>
+  <Tab label="JavaScript">
+    ```js
+    const res = await fetch(
+      'https://api.acme.example/v2/stacks?limit=10&region=us-east-1',
+      { headers: { Authorization: `Bearer ${process.env.ACME_TOKEN}` } },
+    );
+    const { items, next } = await res.json();
+    ```
+  </Tab>
+  <Tab label="Python">
+    ```py
+    import requests
+    r = requests.get(
+        'https://api.acme.example/v2/stacks',
+        params={'limit': 10, 'region': 'us-east-1'},
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    items = r.json()['items']
+    ```
+  </Tab>
+</Tabs>
+
+#### Response
+
+```json
+{
+  "items": [
+    {
+      "id": "stk_a8f3c2e1",
+      "name": "production-web",
+      "region": "us-east-1",
+      "state": "applied",
+      "created_at": "2026-04-01T12:00:00Z",
+      "updated_at": "2026-04-29T18:24:11Z"
+    }
+  ],
+  "next": "eyJjdXJzb3IiOiJzdGtfeHl6In0="
+}
+```
+
+### <Chunk id="api-create-plan" importance={0.85} tags={["endpoint", "create", "plan"]}>`POST /stacks/:id/plans`. Create a plan</Chunk>
+
+Computes a plan against the latest revision of the stack's configuration.
+
+#### Path parameters
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `id` | string | Stack ID (e.g. `stk_a8f3c2e1`) |
+
+#### Body
+
+```json
+{
+  "config_revision": "rev_b2c3d4e5",
+  "auto_approve": false
+}
+```
+
+#### Examples
+
+<Tabs>
+  <Tab label="cURL">
+    ```bash
+    curl -X POST 'https://api.acme.example/v2/stacks/stk_a8f3c2e1/plans' \
+      -H 'Authorization: Bearer acme_live_…' \
+      -H 'Content-Type: application/json' \
+      -d '{"config_revision":"rev_b2c3d4e5"}'
+    ```
+  </Tab>
+  <Tab label="TypeScript">
+    ```ts
+    const plan = await fetch(
+      `https://api.acme.example/v2/stacks/${id}/plans`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ config_revision: rev }),
+      },
+    ).then((r) => r.json());
+    ```
+  </Tab>
+</Tabs>
+
+#### Response (`201 Created`)
+
+```json
+{
+  "id": "pln_4f5g6h7i",
+  "stack_id": "stk_a8f3c2e1",
+  "config_revision": "rev_b2c3d4e5",
+  "diff": {
+    "to_add": 2,
+    "to_change": 1,
+    "to_destroy": 0
+  },
+  "expires_at": "2026-04-30T08:00:00Z"
+}
+```
+
+### <Chunk id="api-errors" importance={0.7} tags={["errors", "status-codes"]}>Errors</Chunk>
+
+All errors share the same envelope:
+
+```json
+{
+  "error": {
+    "code": "stack_not_found",
+    "message": "No stack with id stk_unknown",
+    "request_id": "req_xyz"
+  }
+}
+```
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `invalid_request` | Body or query validation failed. |
+| `401` | `unauthorized` | Bearer token missing or invalid. |
+| `403` | `forbidden` | Token lacks permission for this resource. |
+| `404` | `stack_not_found` | The stack ID doesn't exist or isn't visible. |
+| `409` | `plan_conflict` | A newer plan already exists for this revision. |
+| `429` | `rate_limited` | See `Retry-After` header. |
+| `500` | `internal` | Bug in the API. Include `request_id` if you report it. |
+
+<Callout type="warn" title="Retries">
+  Only `5xx` and `429` are safe to retry automatically. Use exponential
+  backoff with jitter. Start at 1s and cap at 60s.
+</Callout>
+
+### <Chunk id="api-changelog" importance={0.45} tags={["changelog", "versions"]}>Versioning</Chunk>
+
+The API is versioned in the URL (`/v2/`). Breaking changes ship as `/v3/`,
+not as silent changes to `/v2/`. Deprecation notices appear in the
+`Acme-Deprecation` response header at least 90 days before retirement.

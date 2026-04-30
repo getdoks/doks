@@ -1,0 +1,185 @@
+---
+title: "Archetype. Tutorial"
+description: "A complete walkthrough archetype. Steps, code blocks, and Callouts arranged into a real tutorial."
+category: "samples"
+tags: ["archetype", "tutorial", "walkthrough", "template"]
+chunk_id: "samples-archetype-tutorial"
+icon: "book"
+order: 8
+vector_metadata:
+  importance: 0.6
+  related_topics: ["steps", "code-blocks", "callouts", "writing-rag-friendly-mdx"]
+  code_languages: ["bash", "typescript"]
+---
+
+This is a worked example of the **tutorial archetype**: a sequential
+walkthrough, ~10–15 minutes long, with one running code example that grows
+across sections. Use it as a template when you write your own.
+
+The fictional product here is "Acme CLI". A stand-in for whatever you're
+documenting. Replace the prose, keep the structure.
+
+### <Chunk id="tut-prereqs" importance={0.7} tags={["prereqs", "install"]}>Before you start</Chunk>
+
+You'll need:
+
+- Node.js ≥ 20 and npm
+- An Acme API key (free at [acme.example/signup](https://acme.example/signup))
+- About 15 minutes
+
+<Callout type="tip" title="Working through this offline?">
+  Acme CLI runs against a local mock backend with `--mock`. You'll get the
+  same interface, just no real cloud calls. Everything below works either way.
+</Callout>
+
+### <Chunk id="tut-install" importance={0.85} tags={["install", "tutorial-step"]}>Step 1 · Install Acme CLI</Chunk>
+
+<Steps>
+  <Step title="Install the binary">
+    ```bash
+    curl -sSL https://acme.example/install.sh | sh
+    ```
+  </Step>
+  <Step title="Verify the install">
+    ```bash
+    acme --version
+    # acme 2.0.4 (linux/amd64)
+    ```
+  </Step>
+  <Step title="Authenticate">
+    ```bash
+    acme login
+    # opens a browser, then drops a token at ~/.acme/credentials
+    ```
+  </Step>
+</Steps>
+
+### <Chunk id="tut-init" importance={0.85} tags={["init", "tutorial-step"]}>Step 2 · Initialize a stack</Chunk>
+
+A "stack" is a directory of `.cue` files describing the resources you want to
+manage. `acme init` creates the scaffold:
+
+```bash
+acme init my-first-stack
+cd my-first-stack
+```
+
+The scaffold looks like:
+
+```
+my-first-stack/
+├── stack.cue        # top-level definition
+├── providers.cue    # provider auth
+└── resources/
+    └── vm.cue       # an example VM
+```
+
+Open `resources/vm.cue` in your editor:
+
+```cue
+package resources
+
+vm: {
+  name:     "demo-vm"
+  region:   "us-east-1"
+  size:     "small"
+  image:    "ubuntu-22.04"
+}
+```
+
+### <Chunk id="tut-plan" importance={0.85} tags={["plan", "tutorial-step"]}>Step 3 · Plan the changes</Chunk>
+
+Run `acme plan` to see what would happen if you applied this configuration:
+
+```bash
+acme plan
+```
+
+You'll see something like:
+
+```
++ resources.vm "demo-vm"
+  region:  us-east-1
+  size:    small
+  image:   ubuntu-22.04
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+Plan saved as a8f3c2e1...
+```
+
+<Callout type="note" title="Plan hashes">
+  The hash at the bottom is the content-address of this exact plan. You'll
+  feed it to `acme apply` in the next step. If anything in your stack changes
+  before you apply, the hash changes too. Preventing stale plans from
+  running.
+</Callout>
+
+### <Chunk id="tut-apply" importance={0.9} tags={["apply", "tutorial-step"]}>Step 4 · Apply the plan</Chunk>
+
+```bash
+acme apply a8f3c2e1
+```
+
+Output:
+
+```
+▸ resources.vm "demo-vm"
+  creating ........ ok (12.3s)
+
+Apply complete: 1 added, 0 changed, 0 destroyed.
+```
+
+Verify the resource exists:
+
+```bash
+acme list
+# vm "demo-vm". Running, us-east-1, small
+```
+
+### <Chunk id="tut-modify" importance={0.75} tags={["modify", "tutorial-step"]}>Step 5 · Make a change</Chunk>
+
+Edit `resources/vm.cue` to bump the size:
+
+```cue
+vm: {
+  name:     "demo-vm"
+  region:   "us-east-1"
+  size:     "medium"           // ← was "small"
+  image:    "ubuntu-22.04"
+}
+```
+
+Plan and apply:
+
+```bash
+acme plan && acme apply $(acme plans latest)
+```
+
+<Callout type="warn" title="Resizing in production">
+  Changing `size` on a live VM in this provider triggers a reboot. Acme will
+  warn you at plan time and require `--force-reboot` to proceed. For zero-
+  downtime resizes, see [Blue/green deploys](/docs/samples/archetypes/api-reference).
+</Callout>
+
+### <Chunk id="tut-cleanup" importance={0.6} tags={["cleanup", "tutorial-step"]}>Step 6 · Clean up</Chunk>
+
+```bash
+acme destroy
+# Type "demo-vm" to confirm: demo-vm
+# Destroying… ok (4.1s)
+```
+
+### <Chunk id="tut-next" importance={0.55} tags={["next-steps"]}>What's next</Chunk>
+
+You now know enough to:
+
+- Author Cue stacks, plan changes, apply them.
+- Read the diff between configuration and reality.
+- Roll forward and roll back safely.
+
+Next:
+
+- [Reference archetype](/docs/samples/archetypes/api-reference). The
+  shape of a complete API doc.
+- [Component gallery](/docs/samples/components/banners). Every component
+  shown in isolation.

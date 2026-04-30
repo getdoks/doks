@@ -1,0 +1,216 @@
+---
+title: "Landing pages: banner + card grid"
+description: "Author a doks landing page like the home page. Hero banner with CTAs on top, a quick-jump card grid below, all from MDX."
+category: "guides"
+tags: ["landing", "hero", "banner", "qjump", "cards", "homepage"]
+chunk_id: "docs-landing-page"
+icon: "layout"
+order: 5
+vector_metadata:
+  importance: 0.85
+  related_topics: ["styling-pages", "mdx-components"]
+  code_languages: ["mdx", "yaml"]
+---
+
+The home page at `/docs` is the canonical example: an eyebrow + title + description banner with two CTA buttons on top, then a four-card grid of "where to next" links below. Both pieces are MDX components. No React work required to ship one.
+
+### <Chunk id="lp-anatomy" importance={0.9} tags={["anatomy", "structure"]}>Anatomy of a landing page</Chunk>
+
+A doks landing page is three things stacked top to bottom:
+
+1. **Frontmatter that opts into hero mode.** The `eyebrow` field switches the page from "standard" (where the wrapper draws a `<h1>` + `<p className="sec-lead">` from the title and description) to "hero". The wrapper steps out of the way and your MDX takes the whole `<main>`.
+2. **A `<Hero>` banner.** Eyebrow text, big serif title, supporting description, two `<HeroButton>` CTAs.
+3. **A `<QJump>` card grid.** A 2- or 4-card grid of `<QCard>` links. Each card has a title, a one-line description, and an arrow that animates on hover.
+
+Below each of those is just normal MDX prose if you want to add narrative below the cards. Hero pages aren't required to *only* have a hero; they just opt out of the auto-generated title block.
+
+### <Chunk id="lp-frontmatter" importance={0.9} tags={["frontmatter", "hero-mode"]}>Step 1. The frontmatter switch</Chunk>
+
+The single field that puts a page in hero mode is `eyebrow`. The wrapper checks for it and skips its own title block when it's present.
+
+```yaml
+---
+title: "Welcome to doks"
+description: "RAG-optimized documentation built on Next.js + MDX."
+category: "getting-started"
+chunk_id: "docs-welcome"
+icon: "home"
+order: 0
+eyebrow: "Documentation · v0.1.0"   # <- this field flips the page into hero mode
+vector_metadata:
+  importance: 0.6
+---
+```
+
+The string you put in `eyebrow` doesn't get rendered automatically. The `<Hero>` component reads it from its own `eyebrow` prop. Setting the frontmatter field is purely the "give me a blank canvas" toggle.
+
+### <Chunk id="lp-hero-banner" importance={0.95} tags={["hero", "banner", "cta"]}>Step 2. The Hero banner</Chunk>
+
+`<Hero>` takes three text props plus children (the CTA buttons). The eyebrow is small monospace, the title is big serif, the description is muted body text.
+
+```mdx
+<Hero
+  eyebrow="Documentation · v0.1.0"
+  title="doks. RAG-optimized docs"
+  description="Every page is structured to be retrieved by an LLM as easily as it's read by a human. Markdown in, vector-ready chunks out, citations included."
+>
+  <HeroButton href="/docs/guides/writing-rag-friendly-mdx">
+    Start in 5 minutes
+  </HeroButton>
+  <HeroButton href="/docs/samples/archetypes/authentication" variant="ghost">
+    See an example →
+  </HeroButton>
+</Hero>
+```
+
+| `<Hero>` prop | Required | Notes |
+|---|---|---|
+| `eyebrow` | yes | Small uppercase monospace label above the title. Reuse the frontmatter `eyebrow` value to keep them in sync. |
+| `title` | yes | The display headline. Use sentence case. The serif font reads better than ALL CAPS. |
+| `description` | yes | One sentence. Two at most. Anything longer belongs in a body section below. |
+| `children` | no | One or two `<HeroButton>`s. Three feels cluttered. |
+
+`<HeroButton>` props:
+
+| Prop | Required | Notes |
+|---|---|---|
+| `href` | yes | Internal route (`/docs/...`) or external URL |
+| `variant` | no | `"ghost"` swaps the filled background for a bordered button. Use it for the secondary CTA. |
+| `children` | yes | Button label. Include an arrow (`→`) on the secondary if it's a "see also" link. |
+
+The first button is the primary action. What you most want a new visitor to click. The second is escape hatch for visitors who want to look around first. If you can't articulate a clear primary action, you probably don't need a CTA at all.
+
+### <Chunk id="lp-qjump-grid" importance={0.95} tags={["qjump", "qcard", "grid"]}>Step 3. The quick-jump card grid</Chunk>
+
+Below the hero, `<QJump>` lays out a responsive grid of `<QCard>` links. Two columns on narrow screens, more on wide screens. Each card is one logical "next step" the visitor might take.
+
+```mdx
+<QJump>
+  <QCard
+    href="/docs/guides/writing-rag-friendly-mdx"
+    title="Authoring guide"
+    description="Frontmatter + Chunk tag rules."
+  />
+  <QCard
+    href="/docs/samples/archetypes/authentication"
+    title="Example doc"
+    description="A chunk-rich page."
+  />
+  <QCard
+    href="/docs/reference/mdx-components"
+    title="Quick reference"
+    description="Components, frontmatter, anatomy."
+  />
+  <QCard
+    href="/docs/guides/theming"
+    title="Theming"
+    description="Tokens, derivation, custom themes."
+  />
+</QJump>
+```
+
+`<QCard>` props:
+
+| Prop | Required | Notes |
+|---|---|---|
+| `href` | yes | Where the card links to |
+| `title` | yes | Two or three words. The headline. |
+| `description` | yes | One short sentence. Don't repeat the title. |
+
+The arrow you see on each card is rendered by `<QCard>` itself. You don't need to add it. Hover animates the arrow rightward and lifts the card slightly.
+
+**How many cards?** Two, three, or four. Five rarely fits cleanly. If you have more than four "next steps" you probably need to split the page into "for X" and "for Y" sections, each with their own QJump.
+
+### <Chunk id="lp-full-template" importance={0.95} tags={["template", "copy-paste"]}>Putting it together. The full template</Chunk>
+
+This is the entire authored content of `/docs`'s landing page. Copy it, swap the strings, and you have a working landing page in minutes.
+
+```mdx
+---
+title: "Welcome to your product"
+description: "One-line summary of what this docs site is."
+category: "getting-started"
+chunk_id: "docs-welcome"
+icon: "home"
+order: 0
+eyebrow: "Documentation · v1.0.0"
+vector_metadata:
+  importance: 0.6
+---
+
+<Hero
+  eyebrow="Documentation · v1.0.0"
+  title="Your product. What it is in five words"
+  description="One sentence that earns the next click. Concrete > clever."
+>
+  <HeroButton href="/docs/getting-started/quickstart">
+    Get started
+  </HeroButton>
+  <HeroButton href="/docs/reference/api" variant="ghost">
+    Browse the API →
+  </HeroButton>
+</Hero>
+
+<QJump>
+  <QCard
+    href="/docs/getting-started/quickstart"
+    title="Quickstart"
+    description="Up and running in five minutes."
+  />
+  <QCard
+    href="/docs/guides/concepts"
+    title="Core concepts"
+    description="The mental model."
+  />
+  <QCard
+    href="/docs/reference/api"
+    title="API reference"
+    description="Every endpoint."
+  />
+  <QCard
+    href="/docs/guides/recipes"
+    title="Recipes"
+    description="Common task walkthroughs."
+  />
+</QJump>
+```
+
+That's a complete page. Drop it at `content/docs/index.mdx` and it renders at `/docs`.
+
+### <Chunk id="lp-adding-narrative" importance={0.7} tags={["sections", "below-cards"]}>Adding narrative below the cards</Chunk>
+
+A landing page can have body content below the hero+grid. Explanations, "why we built this", or feature highlights. Use `<div className="sec">` blocks just like you would on a standard page (see [Styling pages](/docs/guides/styling-pages)):
+
+```mdx
+<QJump>
+  …
+</QJump>
+
+<div className="content">
+
+<div className="sec">
+
+<div className="sec-eye">Why it exists</div>
+
+<h2 className="sec-h2">The problem we solve</h2>
+
+<p className="sec-lead">A one-sentence summary of the pain.</p>
+
+The longer story goes here as plain markdown, including code, callouts, lists. Anything you'd put on a normal docs page.
+
+</div>
+
+</div>
+```
+
+Remember the [MDX rules](/docs/guides/styling-pages#sp-mdx-rules). Every JSX sibling needs a blank line between it and the next, and markdown is off inside JSX wrappers like `<p className="sec-lead">`.
+
+### <Chunk id="lp-keep-it-tight" importance={0.6} tags={["editorial", "advice"]}>Editorial guidance</Chunk>
+
+A few things that consistently make landing pages worse:
+
+- **More than two CTAs in the hero.** The eye doesn't know where to land. Pick one primary, optionally one secondary.
+- **Vague QCard titles.** "Documentation" or "Get help" don't tell a visitor what they'll get. "Authoring guide" and "API reference" do.
+- **Repeating the description in the QCard.** If the title is "Quickstart" and the description is "Get started quickly", the description is filler. Say what's *different* from the title.
+- **Long hero descriptions.** If the description scrolls, no one reads it. One concrete sentence beats two abstract ones.
+- **A QJump for less than two cards.** A single `<QCard>` is just a link. Make it a normal `<HeroButton>` or inline link instead.

@@ -1,0 +1,88 @@
+---
+title: "Quickstart"
+description: "Scaffold a doks project, ingest the demo corpus, and run the dev server in five minutes."
+category: "getting-started"
+tags: ["install", "setup", "ingest", "dev", "scaffold"]
+chunk_id: "docs-quickstart"
+icon: "bolt"
+order: 1
+vector_metadata:
+  importance: 0.9
+  related_topics: ["install", "project-structure", "ingest", "semantic-search"]
+  code_languages: ["bash", "typescript"]
+---
+
+doks is a local-first documentation site: write MDX, run the ingest script,
+and your prose is queryable as a vector index without leaving your machine.
+This page walks the path from "nothing on disk" to "running locally."
+
+### <Chunk id="qs-scaffold" importance={0.95} tags={["scaffold", "create-doks", "cli"]}>Scaffold a project</Chunk>
+
+```bash
+npx create-doks my-docs
+```
+
+You'll be prompted for site name, GitHub URL, and theme. The CLI writes those
+values into `lib/site.config.ts` and runs `npm install`. See
+[Install](/docs/getting-started/install) for the full flag reference.
+
+The native dependency `better-sqlite3` is built during install. If it fails,
+install your platform's C toolchain (`xcode-select --install` on macOS,
+`build-essential` on Debian/Ubuntu) and re-run `npm install`.
+
+### <Chunk id="qs-set-key" importance={0.85} tags={["env", "voyage", "embeddings"]}>Set an embedding API key (optional)</Chunk>
+
+Real semantic search needs a real embedder. doks defaults to Voyage AI because
+it produces small, fast vectors (`voyage-3-lite`, 512 dimensions).
+
+```bash
+cd my-docs
+cp .env.example .env.local
+echo 'VOYAGE_API_KEY=pa-...' >> .env.local
+```
+
+Without a key, the ingest script falls back to a deterministic hash-based
+pseudo-embedding so the pipeline runs end-to-end. The fallback is **not**
+semantically meaningful. Use it to verify the schema, not to evaluate
+retrieval quality.
+
+### <Chunk id="qs-ingest" importance={0.95} tags={["ingest", "embedding", "sqlite-vec"]}>Build the index</Chunk>
+
+Walk every `.mdx` file under `content/docs/`, split it into retrievable chunks,
+embed each one, and write the vectors to `data/docs.db`.
+
+```bash
+npm run ingest
+```
+
+Output looks like:
+
+```
+▸ doks ingest
+  embedder: voyage (voyage-3-lite, 512d)
+  found 87 chunks across docs
+  embedded 87/87
+  done.
+```
+
+Re-run `ingest` whenever you change MDX content, frontmatter, or the chunk
+extractor. It rebuilds the database from scratch each time.
+
+### <Chunk id="qs-dev" importance={0.85} tags={["dev", "server", "nextjs"]}>Run the dev server</Chunk>
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:3000`. The home page redirects to `/docs`. ⌘K opens
+Spotlight, which calls `/api/docs/search` against your freshly built index.
+
+### <Chunk id="qs-next-steps" importance={0.7} tags={["learning", "next-steps"]}>Next steps</Chunk>
+
+- [Project structure](/docs/getting-started/project-structure). What each
+  file does in a scaffolded project.
+- [Site config](/docs/reference/site-config). Every brand string in one file.
+- [Writing RAG-friendly MDX](/docs/guides/writing-rag-friendly-mdx). The
+  authoring rulebook.
+- [Upgrade](/docs/getting-started/upgrade). Bump `doks-core` and run
+  migrations.

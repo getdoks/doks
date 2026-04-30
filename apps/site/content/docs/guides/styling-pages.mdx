@@ -1,0 +1,266 @@
+---
+title: "Styling pages"
+description: "How a page is laid out, the section primitives that doks gives you, and the MDX rules you need to know to keep the page valid."
+category: "guides"
+tags: ["layout", "styling", "mdx", "sections", "typography"]
+chunk_id: "docs-styling-pages"
+icon: "layout"
+order: 4
+vector_metadata:
+  importance: 0.85
+  related_topics: ["theming", "themes-catalog", "mdx-components"]
+  code_languages: ["mdx", "css"]
+---
+
+Theming controls *colours*. Page styling controls *layout*. How content stacks down a page, where the eyebrow text sits relative to the heading, how leads, callouts, and code blocks read together. doks gives you a small set of primitives plus a strict set of MDX rules. Get both right and pages compose without surprises.
+
+### <Chunk id="sp-page-shape" importance={0.85} tags={["layout", "structure"]}>The shape of a doc page</Chunk>
+
+Every page rendered by `app/docs/[[...slug]]/page.tsx` is one of two shapes:
+
+**Hero pages**. When frontmatter sets `eyebrow`, the page wrapper steps out of the way and your MDX takes the whole `<main>`. The home page (`/docs`) is the canonical example. You're responsible for everything: hero, sections, layout. For a copy-pasteable banner-plus-card-grid template, see [Landing pages: banner + card grid](/docs/guides/landing-page).
+
+**Standard pages**. When frontmatter omits `eyebrow`, the wrapper renders a `<div className="content"> > <div className="sec">` block for you, drops in the title (with `category` as the eyebrow) and `description` (as a `sec-lead` paragraph), then renders your MDX inside it. Most docs in this site are standard.
+
+```yaml
+# Hero page: take over completely
+eyebrow: "Documentation · v0.1.0"
+
+# Standard page: framed by the wrapper
+# (just omit `eyebrow`)
+```
+
+Knowing which shape you've opted into matters because the primitives below assume a `.sec` container. On a standard page that's free; on a hero page you supply your own.
+
+### <Chunk id="sp-section-block" importance={0.95} tags={["sec", "section", "primitive"]}>The `sec` block</Chunk>
+
+A `sec` is a single content section: optional eyebrow, heading, lead paragraph, then prose / components. Everything is just CSS classes. No React component to import.
+
+```mdx
+<div className="sec">
+
+<div className="sec-eye">Why this matters</div>
+
+<h2 className="sec-h2">A clear section title</h2>
+
+<p className="sec-lead">One sentence summarising the section. Sets the tone.</p>
+
+Body prose goes here as normal markdown. Code, lists, callouts. Anything.
+
+</div>
+```
+
+| Class | Element | Purpose |
+|---|---|---|
+| `sec` | `<div>` wrapper | Vertical rhythm + max-width column |
+| `sec-eye` | `<div>` | Eyebrow text. Small, uppercase, monospace |
+| `sec-h2` | `<h2>` | Section heading |
+| `sec-lead` | `<p>` | Lead paragraph. Slightly larger, more muted than body |
+
+Stack as many `sec` blocks as you like. Each one paces the page's vertical flow. Two sections per "topic" is a good rhythm; more than five and the page is probably trying to be two pages.
+
+### <Chunk id="sp-mdx-rules" importance={0.95} tags={["mdx", "rules", "gotchas"]}>The MDX rules you must follow</Chunk>
+
+Three rules. Break any one and the page either fails to render or hydrates with mismatched HTML.
+
+**Rule 1. Blank lines between JSX siblings.**
+
+Inside any JSX wrapper, MDX uses blank lines to know that adjacent elements are *separate* block-level children. Without blanks, MDX wraps the run in a paragraph. Which is invalid the moment one child is a `<div>`.
+
+```mdx
+{/* WRONG. MDX wraps these three lines in a <p>, then <div> is illegal */}
+<div className="sec">
+<div className="sec-eye">Eyebrow</div>
+<h2 className="sec-h2">Heading</h2>
+</div>
+
+{/* RIGHT. Blank lines separate each block */}
+<div className="sec">
+
+<div className="sec-eye">Eyebrow</div>
+
+<h2 className="sec-h2">Heading</h2>
+
+</div>
+```
+
+**Rule 2. Markdown is off inside JSX.**
+
+Backticks, asterisks, links. None of them work inside the children of a JSX element. The text is treated as JSX children, and inside JSX text the only special characters are `{` and `<`.
+
+```mdx
+{/* WRONG. Backticks are literal, <Chunk> is parsed as a JSX component */}
+<p className="sec-lead">Wrap units in `<Chunk id="...">` tags.</p>
+
+{/* RIGHT. Drop the JSX wrapper, use a markdown paragraph */}
+Wrap units in `<Chunk id="...">` tags.
+```
+
+If you must keep the JSX wrapper, use HTML inside it: `<code>` for inline code, `<a>` for links, `<strong>` for bold. Just don't expect markdown shortcuts.
+
+**Rule 3. Escape `<` followed by a digit.**
+
+MDX sees `<1` and tries to parse a JSX tag. There's no such tag, so the page fails to compile. Common offenders: `<100ms`, `<0.5%`. Wrap in backticks, escape with `\<`, or rewrite.
+
+```mdx
+{/* WRONG. Fails to compile */}
+The search call takes <100ms cold.
+
+{/* RIGHT. Backtick wins */}
+The search call takes `<100ms` cold.
+```
+
+These three rules account for almost every authoring bug encountered while building this site.
+
+### <Chunk id="sp-typography-tokens" importance={0.85} tags={["typography", "fonts", "tokens"]}>Typography tokens</Chunk>
+
+Three font tokens come from the active theme. Use them through `var(--token)` so swapping themes cascades automatically.
+
+| Token | Default | Used in |
+|---|---|---|
+| `--sans` | Inter | Body text, UI, sidebar |
+| `--serif` | Fraunces | Hero titles, big display headings |
+| `--mono` | JetBrains Mono | Inline `code`, code blocks, eyebrows, kbd |
+
+To override the body font for one section, scope a CSS rule to a wrapper:
+
+```mdx
+<div className="sec book-style">
+
+<h2 className="sec-h2">A book-feel section</h2>
+
+Long-form prose that wants serif for ambience.
+
+</div>
+
+<style jsx>{`
+  .book-style p {
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.7;
+  }
+`}</style>
+```
+
+For a permanent change across the whole site, edit the `body { font-family: ... }` declaration in `globals.css`.
+
+### <Chunk id="sp-callouts-and-cards" importance={0.75} tags={["callout", "cards", "components"]}>Pulling content out of the flow</Chunk>
+
+Three components break the vertical reading flow without breaking the page rhythm. Use them sparingly. One or two per section is plenty.
+
+**`<Callout>`**. Boxed inline guidance. Three variants:
+
+```mdx
+<Callout type="tip" title="Keep tags consistent.">
+  Renaming tags rotates their embeddings.
+</Callout>
+
+<Callout type="warn" title="Experimental.">
+  This API is experimental.
+</Callout>
+
+<Callout type="note" title="Quick note.">
+  This step is optional in dev.
+</Callout>
+```
+
+**`<QJump>` + `<QCard>`**. The "where to next" grid. Best at the top of an overview page (see `/docs`) or at the end of a long page to point at related content.
+
+```mdx
+<QJump>
+  <QCard
+    href="/docs/guides/theming"
+    title="Theming"
+    description="Tokens, derivation, custom themes."
+  />
+  <QCard
+    href="/docs/reference/themes"
+    title="Shipped themes"
+    description="Light, dark, ocean, paper."
+  />
+</QJump>
+```
+
+**`<Steps>` + `<Step>`**. Numbered procedural lists. The number is auto-generated from order; you supply the title.
+
+```mdx
+<Steps>
+  <Step title="Install">Run `npm install`.</Step>
+  <Step title="Configure">Add `VOYAGE_API_KEY`.</Step>
+  <Step title="Ingest">Run `npm run ingest`.</Step>
+</Steps>
+```
+
+For the full prop signatures, see [MDX components](/docs/reference/mdx-components).
+
+### <Chunk id="sp-code-blocks" importance={0.7} tags={["code", "syntax-highlight"]}>Code blocks</Chunk>
+
+Triple-backtick fences with a language tag map to the `<CodeBlock>` component automatically. The background uses the theme's `--code` token (always dark, even in light themes), and inline `code` uses `--soft` plus `--mono`.
+
+````mdx
+```typescript
+export function add(a: number, b: number) {
+  return a + b;
+}
+```
+````
+
+For multi-language documentation (e.g., showing the same call in different SDKs), wrap several fences in `<Tabs>`:
+
+```mdx
+<Tabs>
+  <Tab label="TypeScript">
+    `const dd = new Datadistill({ apiKey: process.env.DD_API_KEY });`
+  </Tab>
+  <Tab label="Python">
+    `dd = Datadistill(api_key=os.environ["DD_API_KEY"])`
+  </Tab>
+</Tabs>
+```
+
+Inline `<code>` rendering (the kind you get from single backticks in markdown) inherits the theme's `--soft` background and `--mono` font. No per-page styling needed.
+
+### <Chunk id="sp-page-level-styles" importance={0.7} tags={["custom", "css", "scoped"]}>Adding page-level CSS</Chunk>
+
+The cleanest way to add styles that only apply to one MDX page: use a `styled-jsx` `<style jsx>` block inside the file. Styles are scoped to the page, so they won't leak to siblings.
+
+```mdx
+<div className="hero-quote">
+  "Tested by every page that ships."
+</div>
+
+<style jsx>{`
+  .hero-quote {
+    font-family: var(--serif);
+    font-size: 22px;
+    color: var(--brand);
+    border-left: 3px solid var(--brand);
+    padding-left: 16px;
+    margin: 32px 0;
+  }
+`}</style>
+```
+
+Do **not** edit `globals.css` for one-off page styles. Every selector there is global. Reserve `globals.css` for shared primitives like `.sec`, `.sec-eye`, etc.
+
+### <Chunk id="sp-page-frontmatter-knobs" importance={0.7} tags={["frontmatter", "knobs"]}>Frontmatter knobs that affect layout</Chunk>
+
+Two frontmatter fields change *how* a page is laid out (vs the page's metadata, which doesn't affect rendering):
+
+| Field | Effect |
+|---|---|
+| `eyebrow` | Switches the page from "standard" (with the wrapper that draws the title and `sec-lead`) to "hero" (your MDX takes the whole `<main>`). |
+| `icon` | Picks the SVG drawn in the left sidebar next to this page's entry. Names match the lucide icon set. |
+
+The other frontmatter fields (`title`, `description`, `category`, `tags`, `chunk_id`, `vector_metadata`) affect ingestion and metadata, not layout. See [Frontmatter reference](/docs/reference/frontmatter) for the full schema.
+
+### <Chunk id="sp-checklist" importance={0.65} tags={["checklist", "qa"]}>Before-you-commit checklist</Chunk>
+
+A short read-through that catches the bugs most likely to slip in:
+
+- **Blank lines between every JSX sibling.** Every time. Make it muscle memory.
+- **No backticks inside JSX wrappers.** Convert that paragraph to markdown or use `<code>` explicitly.
+- **No `<` followed by a digit in prose.** Backtick-wrap if it's measurement (`<100ms`), escape if it's narration.
+- **`<Chunk>` ids are kebab-case.** `chunk_id` in frontmatter and `id="…"` on each `<Chunk>` follow the same rule.
+- **Themes preview cleanly.** Cycle the page through `light`, `dark`, `paper` via `setTheme('…')` in DevTools. Typography tokens should make this trivial; if anything breaks, you've hard-coded a colour somewhere.
+- **Right-rail TOC matches reality.** Every section heading you wrote should appear in the rail; if it doesn't, the heading was authored as inline JSX inside another wrapper, and the extractor skipped it.

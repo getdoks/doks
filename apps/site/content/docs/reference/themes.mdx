@@ -1,0 +1,110 @@
+---
+title: "Shipped themes"
+description: "Catalog of every theme that ships with doks: palette, mood, and when to pick which."
+category: "reference"
+tags: ["themes", "design", "palette", "catalog"]
+chunk_id: "docs-themes-catalog"
+icon: "swatch"
+order: 4
+vector_metadata:
+  importance: 0.8
+  related_topics: ["theming", "styling-pages"]
+  code_languages: ["javascript"]
+---
+
+doks ships four themes. Each is a single block in `app/themes.css`. Activate one with `document.documentElement.setAttribute('data-theme', '<id>')` or by setting the project default in `app/layout.tsx`. See [Theming](/docs/guides/theming).
+
+### <Chunk id="th-cat-light" importance={0.85} tags={["light", "default"]}>Light. The default</Chunk>
+
+The unconditional `:root` block. Renders even when JavaScript hasn't loaded yet.
+
+| Token | Value | Role |
+|---|---|---|
+| `--brand` | `#8115dd` | Royal violet |
+| `--ink` | `#2c2c3a` | Near-black with a faint cool tint |
+| `--paper` | `#ffffff` | Pure white |
+| `--soft` | `#f0f0f8` | Card backgrounds |
+| `--code` | `#15122b` | Code block background |
+
+**Pick when**. You want the safest, highest-readability default. Suitable for any product docs, no opinion.
+
+```javascript
+setTheme('light');
+```
+
+### <Chunk id="th-cat-dark" importance={0.85} tags={["dark", "default"]}>Dark</Chunk>
+
+Companion to Light. The header toggle in the top right flips between these two.
+
+| Token | Value | Role |
+|---|---|---|
+| `--brand` | `#b27ef0` | Lavender (lifted for dark contrast) |
+| `--ink` | `#eef0fb` | Off-white headings |
+| `--paper` | `#0f0c24` | Deep indigo background |
+| `--soft` | `#1a1830` | Card backgrounds |
+| `--code` | `#050314` | Near-black code blocks |
+
+**Pick when**. You want a dark-mode default. Auto-selected for first-time visitors whose OS prefers dark.
+
+```javascript
+setTheme('dark');
+```
+
+### <Chunk id="th-cat-ocean" importance={0.7} tags={["ocean", "blue", "custom"]}>Ocean</Chunk>
+
+A cool cyan-on-white variant. Sample of the "single hue replacement" pattern. Same surface family as Light, brand swapped from violet to cyan.
+
+| Token | Value | Role |
+|---|---|---|
+| `--brand` | `#0891b2` | Cyan-600 |
+| `--brand-soft` | `#cffafe` | Pale cyan tint |
+| `--ink` | `#0f2a3a` | Deep teal-black |
+| `--paper` | `#ffffff` | White |
+| `--code` | `#082a3d` | Deep teal code blocks |
+
+**Pick when**. Your product brand is in the cyan/teal family. Also a good "calm" alternative to Light when violet feels too playful.
+
+```javascript
+setTheme('ocean');
+```
+
+### <Chunk id="th-cat-paper" importance={0.7} tags={["paper", "warm", "sepia"]}>Paper</Chunk>
+
+A warm cream surface with sepia text and aged-stamp brand. Designed for long-form reading. Pretend you're holding a 1960s technical manual.
+
+| Token | Value | Role |
+|---|---|---|
+| `--brand` | `#9a3412` | Warm rust, like an aged book stamp |
+| `--brand-soft` | `#fef0e0` | Pale apricot tint |
+| `--ink` | `#2a1d10` | Dark espresso text |
+| `--paper` | `#fdf8f0` | Warm cream. Distinctly off-white |
+| `--soft` | `#f5edde` | Slightly more saturated cream cards |
+| `--code` | `#1f1610` | Deep warm dark code blocks |
+
+**Pick when**. Your docs are mostly prose and you want a non-clinical reading feel. Particularly good for tutorials, narrative explanations, and reference material that gets read end-to-end rather than skimmed.
+
+```javascript
+setTheme('paper');
+```
+
+### <Chunk id="th-cat-comparison" importance={0.7} tags={["comparison", "matrix"]}>At-a-glance comparison</Chunk>
+
+| Theme | Brightness | Brand hue | Best for |
+|---|---|---|---|
+| `light` | Light | Violet | General-purpose default |
+| `dark` | Dark | Lavender | Low-light reading, OS dark mode |
+| `ocean` | Light | Cyan | Cyan-brand products |
+| `paper` | Light (warm) | Rust/sepia | Long-form reading, narrative docs |
+
+All four use the same token set, so any custom MDX component that follows the [token reference](/docs/guides/theming) renders correctly under all of them. No per-theme branches needed.
+
+### <Chunk id="th-cat-add-your-own" importance={0.65} tags={["custom", "add-theme"]}>Adding a fifth theme</Chunk>
+
+Each shipped theme is a working starter. To build on Paper:
+
+1. Copy the `:root[data-theme="paper"]` block in `app/themes.css`.
+2. Rename the selector. E.g. `data-theme="parchment"`.
+3. Tweak the values you want to differ.
+4. Append `{ id: 'parchment', label: 'Parchment' }` to `THEMES` in `lib/theme.ts`.
+
+The full walkthrough lives at [Theming → Add a theme in three steps](/docs/guides/theming#th-add-a-theme), with a worked example for a `midnight` dark theme at [Theming → Worked example](/docs/guides/theming#th-worked-example).

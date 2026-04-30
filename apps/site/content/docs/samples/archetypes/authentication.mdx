@@ -1,0 +1,82 @@
+---
+title: "Archetype. Concept page (Authentication)"
+description: "A worked example of a concept page. JWT issuance, session lifecycle, and revocation for a fictional product."
+category: "samples"
+tags: ["archetype", "concept", "auth", "jwt", "session", "template"]
+chunk_id: "samples-archetype-auth"
+icon: "lock"
+order: 10
+vector_metadata:
+  importance: 0.55
+  related_topics: ["tutorial", "api-reference", "writing-rag-friendly-mdx"]
+  code_languages: ["typescript"]
+---
+
+This is a worked example of the **concept-page archetype**. Denser than a
+landing page, looser than an API reference, used for explaining *how* a
+system works rather than *how to use it*. The fictional subject is JWT-based
+authentication; replace the prose with your own concept.
+
+<Callout type="note" title="This is a sample, not real doks behavior.">
+  doks itself ships no auth system. This page exists to show how a concept
+  page is structured: a short intro, three to five named chunks, one
+  diagram- or table-shaped section near the end.
+</Callout>
+
+Authentication in this fictional product is built around short-lived JWTs issued by an OAuth-compatible identity provider. Sessions are managed server-side; the client never sees a refresh token.
+
+<Callout type="tip" title="Server-side sessions">
+  All session state lives on the server. The browser only ever holds an opaque session ID and a short-lived access JWT.
+</Callout>
+
+### <Chunk id="auth-jwt-flow" importance={0.95} tags={["jwt", "flow"]}>JWT issuance flow</Chunk>
+
+When a user signs in, the identity provider returns an authorization code. The application server exchanges that code for an access token and an opaque refresh token, stores the refresh token in an encrypted session cookie, and returns the access token (a JWT) to the browser.
+
+The JWT contains:
+
+- `sub`. The user ID
+- `tid`. The tenant ID
+- `scope`. A space-separated list of permission strings
+- `exp`. Expiration, set 15 minutes after issuance
+
+```typescript
+export async function issueAccessToken(userId: string, tenantId: string) {
+  const scope = await loadScopesForUser(userId, tenantId);
+  return jwt.sign(
+    { sub: userId, tid: tenantId, scope: scope.join(' ') },
+    process.env.JWT_SIGNING_KEY!,
+    { expiresIn: '15m', algorithm: 'EdDSA' }
+  );
+}
+```
+
+The signing key is rotated weekly; the JWKS endpoint at `/.well-known/jwks.json` exposes both the current and previous public keys so in-flight tokens stay valid through a rotation.
+
+### <Chunk id="auth-session-mgmt" importance={0.85} tags={["session", "cookies"]}>Session management</Chunk>
+
+A session is a server-side record keyed by a 256-bit random session ID. The session ID is delivered to the browser as an `HttpOnly`, `Secure`, `SameSite=Lax` cookie named `__doks_sid`. Because the cookie is opaque, revoking access is a single database write. There is no need to wait for a JWT to expire.
+
+Sessions are pruned on three events:
+
+1. Explicit sign-out (DELETE on the session row)
+2. Idle timeout. 14 days of inactivity
+3. Absolute timeout. 90 days from session creation, regardless of activity
+
+When the access JWT expires, the browser calls `/api/auth/refresh`. The server reads the session cookie, looks up the refresh token, and. If the session is still valid. Issues a new JWT. The refresh token never leaves the server.
+
+### <Chunk id="auth-revocation" importance={0.7} tags={["session", "security"]}>Forcing revocation</Chunk>
+
+Two operations force immediate revocation across all of a user's sessions:
+
+- Password change
+- Tenant admin pressing "sign out everywhere"
+
+Both increment a `session_generation` counter on the user row. The middleware compares the JWT's `gen` claim to the current generation on every request; a mismatch returns `401`.
+
+### Related
+
+- [Tutorial archetype](/docs/samples/archetypes/tutorial). Sequential walkthroughs.
+- [API-reference archetype](/docs/samples/archetypes/api-reference). Endpoint documentation.
+- [Landing-page archetype](/docs/samples/archetypes/landing-page). Marketing-style page.
+- [Writing RAG-friendly MDX](/docs/guides/writing-rag-friendly-mdx). How this page is structured for retrieval.

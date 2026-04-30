@@ -1,0 +1,24 @@
+{
+  "name": "create-doks",
+  "version": "0.1.0",
+  "description": "Scaffold a new doks documentation site.",
+  "type": "module",
+  "bin": { "create-doks": "./index.js" },
+  "files": ["index.js", "README.md"],
+  "engines": { "node": ">=20" },
+  "homepage": "https://github.com/getdoks/doks/tree/main/packages/create-doks",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/getdoks/doks.git",
+    "directory": "packages/create-doks"
+  },
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "degit": "^2.8.4",
+    "kleur": "^4.1.5",
+    "prompts": "^2.4.2"
+  }
+}

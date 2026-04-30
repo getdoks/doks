@@ -1,0 +1,125 @@
+---
+title: "Code blocks"
+description: "Fenced code blocks with language hints, multi-line examples, and shell sessions."
+category: "samples"
+tags: ["code", "syntax", "highlighting"]
+chunk_id: "samples-code-blocks"
+icon: "code"
+order: 4
+vector_metadata:
+  importance: 0.6
+  related_topics: ["mdx-components", "tutorial", "writing-rag-friendly-mdx"]
+  code_languages: ["bash", "typescript", "javascript", "json", "css", "yaml"]
+---
+
+Standard markdown code fences (` ``` `) render through the framework's
+`<CodeBlock>` component. The language hint after the opening fence drives
+syntax highlighting and the language label shown in the top-right corner.
+
+### <Chunk id="code-bash" importance={0.65} tags={["code", "bash", "shell"]}>Bash / shell</Chunk>
+
+```bash
+# Scaffold a new doks project
+npx create-doks my-docs
+
+cd my-docs
+npm run ingest    # builds data/docs.db
+npm run dev       # starts http://localhost:3000
+```
+
+### <Chunk id="code-typescript" importance={0.7} tags={["code", "typescript"]}>TypeScript</Chunk>
+
+```ts
+import type { SiteConfig } from 'doks-core';
+
+export const siteConfig: SiteConfig = {
+  siteName: 'Acme Docs',
+  logoText: 'Acme',
+  logoTag: 'Docs',
+  description: 'Internal engineering documentation for Acme Inc.',
+  githubUrl: 'https://github.com/acme/docs',
+  ctaLabel: 'Open dashboard',
+  ctaUrl: 'https://app.acme.com',
+  changelogUrl: '/docs/changelog',
+  chatLabel: 'Ask Acme docs',
+  defaultTheme: 'dark',
+  showUpdatedBadge: true,
+};
+
+export default siteConfig;
+```
+
+### <Chunk id="code-tsx" importance={0.55} tags={["code", "tsx", "react"]}>TSX / React</Chunk>
+
+```tsx
+import { DocsShell, buildDocTree, getAllDocs } from 'doks-core';
+import { siteConfig } from '@/lib/site.config';
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>
+        <DocsShell
+          tree={buildDocTree()}
+          spotlightDocs={getAllDocs()}
+          siteConfig={siteConfig}
+        >
+          {children}
+        </DocsShell>
+      </body>
+    </html>
+  );
+}
+```
+
+### <Chunk id="code-json" importance={0.5} tags={["code", "json"]}>JSON</Chunk>
+
+```json
+{
+  "results": [
+    {
+      "chunkId": "samples-code-blocks:code-bash",
+      "pageHref": "/docs/samples/components/code-blocks",
+      "heading": "Bash / shell",
+      "score": 0.83,
+      "snippet": "Scaffold a new doks project npx create-doks my-docs..."
+    }
+  ]
+}
+```
+
+### <Chunk id="code-yaml" importance={0.45} tags={["code", "yaml", "frontmatter"]}>YAML (frontmatter)</Chunk>
+
+```yaml
+title: "Authentication"
+description: "How API keys are issued, rotated, and revoked."
+category: "core-concepts"
+tags: ["auth", "api-keys", "security"]
+order: 2
+vector_metadata:
+  importance: 0.85
+  related_topics: ["rbac", "audit-log"]
+  code_languages: ["bash", "typescript"]
+```
+
+### <Chunk id="code-no-lang" importance={0.4} tags={["code", "plain"]}>No language hint</Chunk>
+
+If you skip the language hint, the block still renders. Just without
+highlighting and with `text` as the language label.
+
+```
+▸ doks ingest
+  embedder: voyage (voyage-3-lite, 512d)
+  found 88 chunks across docs
+  embedded 88/88
+  done.
+```
+
+### <Chunk id="code-when" importance={0.45} tags={["code", "guidance"]}>Authoring tips</Chunk>
+
+- **Always set the language.** It powers both the highlighter and the visible
+  label, and improves screen-reader semantics.
+- **Keep blocks ≤ 25 lines** when possible. Long blocks hurt mobile reading
+  and bloat the chunk for retrieval.
+- **Show the smallest reproducible snippet.** Diff-style fragments beat full
+  files for retrieval scoring. The chunk text becomes more discriminative.

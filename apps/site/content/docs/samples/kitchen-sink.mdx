@@ -1,0 +1,206 @@
+---
+title: "Kitchen sink"
+description: "Every doks MDX component on one page. The fastest way to scan what's available."
+category: "samples"
+tags: ["kitchen-sink", "showcase", "all-components"]
+chunk_id: "samples-kitchen-sink"
+icon: "puzzle"
+order: 10
+eyebrow: "Every component, one page"
+vector_metadata:
+  importance: 0.65
+  related_topics: ["mdx-components", "banners", "callouts", "cards", "steps", "tabs", "code-blocks"]
+---
+
+<Hero
+  eyebrow="Every component, one page"
+  title="The kitchen sink."
+  description="Hero, Callout, QJump, Steps, Tabs, CodeBlock, brand inlines, MDX tables. All in one render."
+>
+  <HeroButton href="/docs/samples">Back to samples</HeroButton>
+  <HeroButton href="/docs/reference/mdx-components" variant="ghost">
+    API reference →
+  </HeroButton>
+</Hero>
+
+<QJump>
+  <QCard
+    href="#qs-callouts"
+    title="Callouts"
+    description="Inline note, tip, and warning blocks."
+  />
+  <QCard
+    href="#qs-steps"
+    title="Steps"
+    description="Numbered procedural lists."
+  />
+  <QCard
+    href="#qs-tabs"
+    title="Tabs"
+    description="Mutually exclusive content panels."
+  />
+  <QCard
+    href="#qs-code"
+    title="Code"
+    description="Fenced code blocks with language hints."
+  />
+</QJump>
+
+<div className="content">
+
+<div className="sec">
+
+<div className="sec-eye">Brand inlines</div>
+
+<h2 className="sec-h2">SiteName + GithubUrl</h2>
+
+<div className="sec-lead">
+  Use `<SiteName />` and `<GithubUrl />` in prose to inline values from your
+  `lib/site.config.ts`. Example: this site is named **<SiteName />**, and
+  the source lives at <GithubUrl />.
+</div>
+
+```mdx
+This site is named **<SiteName />**, and the source lives at <GithubUrl />.
+```
+
+</div>
+
+<div className="sec" id="qs-callouts">
+
+<div className="sec-eye">Callouts</div>
+
+<h2 className="sec-h2">Three flavors</h2>
+
+<Callout type="note" title="note">
+  The neutral default. Use it for context that's worth surfacing but doesn't
+  require action.
+</Callout>
+
+<Callout type="tip" title="tip">
+  Use it to call out a non-obvious shortcut, idiom, or cleaner alternative.
+</Callout>
+
+<Callout type="warn" title="warn">
+  Use it to flag gotchas, edge cases, or breaking behavior. Reserve for things
+  that have *bitten* readers in the wild.
+</Callout>
+
+</div>
+
+<div className="sec" id="qs-steps">
+
+<div className="sec-eye">Steps</div>
+
+<h2 className="sec-h2">Sequential walkthroughs</h2>
+
+<Steps>
+  <Step title="Stage one">
+    Each step takes a `title` (optional) and any MDX as the body.
+  </Step>
+  <Step title="Stage two">
+    Bodies can contain code, lists, links, callouts. The full MDX feature set.
+  </Step>
+  <Step title="Stage three">
+    Numbering is automatic. The render is a styled `<ol>`.
+  </Step>
+</Steps>
+
+</div>
+
+<div className="sec" id="qs-tabs">
+
+<div className="sec-eye">Tabs</div>
+
+<h2 className="sec-h2">Parallel views</h2>
+
+<Tabs>
+  <Tab label="Markdown">
+    Tab content can be plain markdown. Paragraphs, lists, links. And
+    renders identically to the surrounding prose.
+  </Tab>
+  <Tab label="Code">
+    ```ts
+    export function add(a: number, b: number): number {
+      return a + b;
+    }
+    ```
+  </Tab>
+  <Tab label="A callout">
+    <Callout type="tip">
+      Tabs can contain other components, including callouts.
+    </Callout>
+  </Tab>
+</Tabs>
+
+</div>
+
+<div className="sec" id="qs-code">
+
+<div className="sec-eye">Code blocks</div>
+
+<h2 className="sec-h2">Fenced code with language hints</h2>
+
+```ts
+import { embedOne, vectorSearch } from 'doks-core';
+
+const queryVec = await embedOne(query, 'query');
+const results = vectorSearch(queryVec, 5);
+```
+
+```bash
+npm run ingest    # writes data/docs.db
+npm run dev       # serves on :3000
+npx doks upgrade  # bump framework
+```
+
+```json
+{
+  "siteName": "Acme Docs",
+  "defaultTheme": "dark",
+  "showUpdatedBadge": true
+}
+```
+
+</div>
+
+<div className="sec">
+
+<div className="sec-eye">Tables</div>
+
+<h2 className="sec-h2">Standard markdown tables</h2>
+
+| Component | Use it for | Skip for |
+| --- | --- | --- |
+| `<Hero>` | Landing pages | Reference pages |
+| `<Callout>` | Notes, tips, warnings | Inline asides. Use a parenthetical |
+| `<QJump>` | 3–6 sibling links | Long lists. Use a sidebar |
+| `<Steps>` | Sequential procedures | Parallel choices. Use Tabs |
+| `<Tabs>` | Mutually exclusive options | Sequential procedures. Use Steps |
+
+</div>
+
+<div className="sec">
+
+<div className="sec-eye">Wrapping it all up</div>
+
+<h2 className="sec-h2">One last thing. `<Chunk>`</h2>
+
+<div className="sec-lead">Every example above lives inside the parent page chunk. To make a section independently retrievable, wrap it in <code>&lt;Chunk id="…"&gt;</code>:</div>
+
+````mdx
+### <Chunk id="auth-jwt" importance={0.9} tags={["jwt"]}>JWT issuance</Chunk>
+
+How JWTs are minted, signed, and rotated.
+
+```ts
+const token = jwt.sign(payload, secret, { expiresIn: '15m' });
+```
+````
+
+This entire kitchen-sink page is one big chunk. The component-gallery and
+archetype pages chunk per section so search can return finer-grained results.
+
+</div>
+
+</div>

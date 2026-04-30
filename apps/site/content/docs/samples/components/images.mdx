@@ -1,0 +1,115 @@
+---
+title: "Images"
+description: "Embed images and screenshots in MDX. Bare markdown, captioned figures, and alignment patterns."
+category: "samples"
+tags: ["images", "media", "figure", "mdx"]
+chunk_id: "samples-images"
+icon: "image"
+order: 7
+vector_metadata:
+  importance: 0.55
+  related_topics: ["frontmatter", "mdx-components"]
+  code_languages: ["mdx", "html"]
+---
+
+doks renders standard markdown image syntax, and ships a `<Figure>` MDX
+component for captioned media. Both pull from any URL. The
+canonical place for project assets is `apps/site/public/`, served at the URL
+root.
+
+### <Chunk id="img-markdown" importance={0.7} tags={["images", "markdown"]}>Standard markdown</Chunk>
+
+The simplest path. Drop a file into `public/` and reference it with the
+markdown image syntax:
+
+![doks logo](/logo.svg)
+
+```mdx
+![doks logo](/logo.svg)
+```
+
+The framework styles bare images with rounded corners, a max-width of the
+content column, and (in dark theme) a soft border so monochrome images
+don't blur into the background. Alt text is required. It's read by
+screen readers and shown if the file fails to load.
+
+### <Chunk id="img-figure" importance={0.75} tags={["images", "figure", "caption"]}>Captioned with `<Figure>`</Chunk>
+
+For images that need a caption, use the `<Figure>` MDX component. Pass
+`src`, `alt`, and a `caption` (which can be plain text or any inline MDX).
+
+<Figure
+  src="/logo.svg"
+  alt="The doks wordmark"
+  caption="The wordmark. Paths fill on currentColor, dot stays brand purple."
+/>
+
+```mdx
+<Figure
+  src="/logo.svg"
+  alt="The doks wordmark"
+  caption="The wordmark. Paths fill on currentColor, dot stays brand purple."
+/>
+```
+
+| Prop | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `src` | `string` | yes | URL or `/`-rooted path inside `public/`. |
+| `alt` | `string` | yes | Screen-reader text. Required for accessibility. |
+| `caption` | `ReactNode` | no | Plain text or inline JSX. Rendered as `<figcaption>`. |
+| `width` / `height` | `number` | no | Forwarded to the `<img>` tag. Set them to reserve layout space and prevent cumulative-layout-shift. |
+
+### <Chunk id="img-where" importance={0.6} tags={["images", "public", "assets"]}>Where to put image files</Chunk>
+
+| Path | Reference as | Use for |
+| --- | --- | --- |
+| `apps/site/public/logo.svg` | `/logo.svg` | Brand assets, screenshots, anything you want at a stable URL. |
+| `apps/site/public/screens/dashboard.png` | `/screens/dashboard.png` | Subdirectories work. They're served at `/screens/...`. |
+| External URL (e.g. CDN) | `https://cdn.example.com/foo.png` | Third-party images, hot-linked diagrams. No build-time check. |
+
+The `public/` folder is for **static assets**. Anything in there is
+copied as-is to the build output and served from the URL root.
+
+<Callout type="warn" title="Don't import images into MDX directly">
+  Some Markdown frameworks let you write `import logo from './logo.svg'` at
+  the top of an `.mdx` file. doks doesn't pipe MDX through a bundler that
+  resolves those imports. Use the `/path/to/file.svg` URL form instead.
+</Callout>
+
+### <Chunk id="img-formats" importance={0.55} tags={["images", "formats"]}>Format choice</Chunk>
+
+| Format | Best for | Notes |
+| --- | --- | --- |
+| **SVG** | logos, icons, diagrams | Scales infinitely; tiny; works with `currentColor` if inlined. |
+| **PNG** | screenshots, UI captures | Lossless; large; use 2× resolution for crisp HiDPI rendering. |
+| **WebP / AVIF** | photos, large images | Smaller than PNG; supported by all modern browsers. |
+| **GIF** | animation | Heavy. Prefer a short MP4 / WebM if the platform allows. |
+
+For UI screenshots that should feel "lived-in," pair a PNG with a
+descriptive `<Figure caption>` so the reader sees both *what* and *why*.
+
+### <Chunk id="img-dark-mode" importance={0.6} tags={["images", "dark-mode", "theme"]}>Dark-mode-aware images</Chunk>
+
+For images that would invert poorly between themes (e.g. a screenshot of a
+light-themed UI shown on a dark page), ship two files and switch between
+them with the same pattern the doks logo uses. Two `<img>` elements with
+class names that respond to `[data-theme="dark"]`. See
+`apps/site/public/{logo,logo-dark}.svg` and the `.logo-img-light` /
+`.logo-img-dark` rules in `globals.css` for a working example.
+
+For everyday content images (photos, generic illustrations), one file is
+fine. The global `.content img` style adds a soft border in dark theme so
+monochrome images don't disappear.
+
+### <Chunk id="img-best-practices" importance={0.5} tags={["images", "best-practices"]}>Authoring tips</Chunk>
+
+- **Always set `alt`.** It's required for screen readers and shown when the
+  image fails to load. For purely decorative images, pass `alt=""`
+  (*empty*, not missing).
+- **Set `width` and `height` on `<Figure>` where possible.** Reserves
+  layout space, prevents the page from jumping when the image loads.
+- **Compress PNGs.** A 2 MB screenshot blows out your build size and
+  your reader's bandwidth. Tools like `pngquant`, `oxipng`, or the
+  Squoosh CLI cut sizes by 60–80% with no perceptible loss.
+- **Use `loading="lazy"`** for images below the fold. `<Figure>` does this
+  automatically.

@@ -1,0 +1,102 @@
+---
+title: "Banners (Hero)"
+description: "Marketing-style page banners with eyebrow, title, description, and call-to-action buttons."
+category: "samples"
+tags: ["hero", "banner", "cta", "landing"]
+chunk_id: "samples-banners"
+icon: "flag"
+order: 1
+vector_metadata:
+  importance: 0.55
+  related_topics: ["landing-page", "cards", "frontmatter"]
+---
+
+`<Hero>` is the page-top banner used on landing-style pages. It triggers
+"hero mode" rendering (no automatic title/description block) when the page's
+frontmatter has an `eyebrow:` field.
+
+<Callout type="note" title="Previews are scaled down">
+  Each example below is wrapped in a `<div className="demo">` preview frame
+  that scales the Hero so multiple variants fit on one page. On a real page,
+  the Hero takes the full content width and bigger typography.
+</Callout>
+
+### <Chunk id="banners-default" importance={0.7} tags={["hero", "default"]}>Default. Eyebrow + title + description + buttons</Chunk>
+
+The full layout: small eyebrow tag, big title, supporting paragraph, and one or
+more `<HeroButton>` children.
+
+<div className="demo">
+  <Hero
+    eyebrow="v1.0 · Now available"
+    title="The fastest way to ship a docs site."
+    description="Markdown in, vector index out. No SaaS layer, no sign-up, no telemetry."
+  >
+    <HeroButton href="/docs/getting-started/install">Get started</HeroButton>
+    <HeroButton href="/docs/samples" variant="ghost">View samples →</HeroButton>
+  </Hero>
+</div>
+
+```mdx
+<Hero
+  eyebrow="v1.0 · Now available"
+  title="The fastest way to ship a docs site."
+  description="Markdown in, vector index out. No SaaS layer, no sign-up, no telemetry."
+>
+  <HeroButton href="/docs/getting-started/install">Get started</HeroButton>
+  <HeroButton href="/docs/samples" variant="ghost">View samples →</HeroButton>
+</Hero>
+```
+
+### <Chunk id="banners-title-only" importance={0.55} tags={["hero", "minimal"]}>Title-only</Chunk>
+
+For section pages or short releases, drop the eyebrow and buttons.
+
+<div className="demo">
+  <Hero title="Release notes" description="What changed in the 0.2 line." />
+</div>
+
+```mdx
+<Hero title="Release notes" description="What changed in the 0.2 line." />
+```
+
+### <Chunk id="banners-buttons" importance={0.6} tags={["hero", "buttons", "cta"]}>Two-button hero</Chunk>
+
+Pair a primary button with a ghost variant to balance "main path" and
+"secondary action."
+
+<div className="demo">
+  <Hero
+    title="Two ways in."
+    description="Pick the path that matches what you're doing."
+  >
+    <HeroButton href="/docs/getting-started/quickstart">Quickstart</HeroButton>
+    <HeroButton href="/docs/getting-started/install" variant="ghost">
+      Install reference
+    </HeroButton>
+  </Hero>
+</div>
+
+```mdx
+<Hero
+  title="Two ways in."
+  description="Pick the path that matches what you're doing."
+>
+  <HeroButton href="/docs/getting-started/quickstart">Quickstart</HeroButton>
+  <HeroButton href="/docs/getting-started/install" variant="ghost">
+    Install reference
+  </HeroButton>
+</Hero>
+```
+
+### <Chunk id="banners-when" importance={0.5} tags={["hero", "guidance"]}>When to use a hero</Chunk>
+
+| Use it for | Skip it for |
+| --- | --- |
+| Landing/index pages | Reference pages |
+| Section overviews | Tutorial steps |
+| Product launches | API endpoints |
+
+Set `eyebrow:` in frontmatter to switch the page into hero mode (the standard
+title/description block is suppressed). Without `eyebrow:`, the page renders
+the normal heading even if a `<Hero>` is also present.

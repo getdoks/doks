@@ -1,0 +1,66 @@
+---
+title: "Migrations"
+description: "How to author migration scripts for breaking changes in doks-core."
+category: "reference"
+tags: ["migrations", "upgrade", "contributors"]
+chunk_id: "docs-migrations"
+icon: "git-branch"
+order: 9
+vector_metadata:
+  importance: 0.5
+  related_topics: ["upgrade"]
+  code_languages: ["javascript", "typescript"]
+---
+
+This page is for **framework contributors**. People shipping new versions of
+`doks-core`. Application authors use [Upgrade](/docs/getting-started/upgrade)
+instead.
+
+### <Chunk id="migrations-shape" importance={0.85} tags={["migrations"]}>Shape</Chunk>
+
+A migration is a JS module in `packages/doks-core/migrations/` named after the
+**target** version. `0.2.0.js` runs when a user upgrades *to* `0.2.0`.
+
+```js
+// packages/doks-core/migrations/0.2.0.js
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+export default async function ({ root }) {
+  const path = join(root, 'lib/site.config.ts');
+  const src = readFileSync(path, 'utf8');
+  if (src.includes('analyticsKey')) return; // already applied
+  const updated = src.replace(
+    'showUpdatedBadge: ',
+    'analyticsKey: undefined,\n  showUpdatedBadge: ',
+  );
+  writeFileSync(path, updated);
+  console.log('  + added analyticsKey to site.config.ts');
+}
+```
+
+`root` is the absolute path to the user's project (their `cwd`).
+
+### <Chunk id="migrations-policy" importance={0.9} tags={["migrations"]}>Policy</Chunk>
+
+- **Every breaking change to the public API gets a migration.** No exceptions.
+- **Edit user-owned files only.** The framework lives in `node_modules/doks-core`
+  and is replaced wholesale during upgrade. Your migration's job is to bring the
+  *consumer's* code in line with the new framework.
+- **Idempotent.** A second run must be a no-op. Detect "already applied" by
+  feature-checking the file content (see the example above).
+- **Print one line per change.** Users should see exactly what was touched.
+- **Run order is semver.** `0.2.0` runs before `0.3.0`.
+
+### <Chunk id="migrations-policy-publish" importance={0.6} tags={["migrations"]}>When to write one</Chunk>
+
+You need a migration when a `doks-core` release would otherwise break a project
+on `npm install doks-core@latest`. Examples:
+
+- Adding a required field to `SiteConfig`.
+- Renaming a public component or hook export.
+- Changing a CSS class name that consumer overrides depend on.
+- Renaming a frontmatter field that the ingest script consumes.
+
+You **don't** need a migration when the change is additive and optional
+(new exports, new optional config fields), or when it is purely internal.

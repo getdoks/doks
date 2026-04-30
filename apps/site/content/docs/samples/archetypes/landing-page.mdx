@@ -1,0 +1,138 @@
+---
+title: "Archetype. Landing page"
+description: "A complete marketing-style landing page for a fictional product, using Hero, QJump, Callouts, and Steps together."
+category: "samples"
+tags: ["archetype", "landing", "marketing", "template"]
+chunk_id: "samples-archetype-landing"
+icon: "home"
+order: 7
+eyebrow: "Archetype · Marketing-style page"
+vector_metadata:
+  importance: 0.6
+  related_topics: ["banners", "cards", "callouts", "steps"]
+---
+
+<Hero
+  eyebrow="Acme CLI · v2.0"
+  title="Ship infrastructure changes in seconds, not minutes."
+  description="A single binary for your terraform-meets-kubectl moment. Type-checked plans, declarative state, zero YAML."
+>
+  <HeroButton href="/docs/samples/archetypes/tutorial">
+    Try the tutorial
+  </HeroButton>
+  <HeroButton href="/docs/samples/archetypes/api-reference" variant="ghost">
+    View the API →
+  </HeroButton>
+</Hero>
+
+<QJump>
+  <QCard
+    href="/docs/samples/archetypes/tutorial"
+    title="Five-minute start"
+    description="Deploy your first stack from a sample repo. No cloud account required."
+  />
+  <QCard
+    href="/docs/samples/archetypes/api-reference"
+    title="Reference"
+    description="Every command, every flag, every endpoint. The terse one-liner version of the manual."
+  />
+  <QCard
+    href="/docs/core-concepts/chunks"
+    title="How it works"
+    description="The runtime is a 4MB statically-linked Go binary. Plans are ASTs, not strings."
+  />
+  <QCard
+    href="/docs/getting-started/upgrade"
+    title="Upgrades"
+    description="`acme upgrade` bumps the binary and applies any pending state migrations."
+  />
+</QJump>
+
+<div className="content">
+
+<div className="sec">
+
+<div className="sec-eye">Why Acme CLI</div>
+
+<h2 className="sec-h2">Three things you can stop doing today.</h2>
+
+<div className="sec-lead">YAML is a checked baggage problem. Acme CLI replaces three things. A templating language, a state file, and a CI plugin. With one signed binary that knows about all three.</div>
+
+<Callout type="tip" title="Already know terraform?">
+  Acme CLI's plan/apply loop is the same shape, but the configuration language
+  is type-checked Cue rather than HCL, and state is content-addressed instead
+  of timestamp-locked. Migration takes one afternoon for most teams.
+</Callout>
+
+</div>
+
+<div className="sec">
+
+<div className="sec-eye">How it works</div>
+
+<h2 className="sec-h2">Four stages. One binary.</h2>
+
+<Steps>
+  <Step title="Stage 01 · Author">
+    Write your stack as `*.cue` files. The compiler enforces structural type
+    safety at write-time. No more `terraform plan` surprises.
+  </Step>
+  <Step title="Stage 02 · Plan">
+    `acme plan` evaluates every change and emits a content-addressed plan
+    artifact. Plans are deterministic and review-friendly.
+  </Step>
+  <Step title="Stage 03 · Apply">
+    `acme apply <plan-hash>` is a one-liner. Workers fan out, run side-effects
+    in dependency order, and abort on first error.
+  </Step>
+  <Step title="Stage 04 · Observe">
+    Every apply emits a structured event log. Pipe it to your existing
+    observability stack. No separate Acme dashboard to operate.
+  </Step>
+</Steps>
+
+</div>
+
+<div className="sec">
+
+<div className="sec-eye">Quickstart</div>
+
+<h2 className="sec-h2">Deploy in five minutes.</h2>
+
+<div className="sec-lead">If you've got Docker and 5MB of disk, you've got everything you need.</div>
+
+```bash
+# 1. Install the binary
+curl -sSL https://acme.example/install.sh | sh
+
+# 2. Initialize a stack
+acme init my-stack && cd my-stack
+
+# 3. Plan + apply
+acme plan
+acme apply
+```
+
+<Callout type="warn" title="Production checklist">
+  For real workloads, set `ACME_STATE_BUCKET` to a versioned S3-compatible
+  bucket and rotate it through CI. Never check state into git.
+</Callout>
+
+</div>
+
+<div className="sec">
+
+<div className="sec-eye">What's in the box</div>
+
+<h2 className="sec-h2">Built end-to-end.</h2>
+
+- **Cue-based authoring** with structural type checking
+- **Content-addressed plans**. Review them before you apply them
+- **Dependency-aware apply** with cycle detection at plan time
+- **Built-in providers** for AWS, GCP, Azure, Kubernetes, and Vercel
+- **`acme upgrade`** for zero-downtime binary + migration bumps
+- **Structured event logs** that pipe to anything
+
+</div>
+
+</div>

@@ -1,0 +1,114 @@
+/* ────────────────────────────────────────────────────────────
+   Themes
+   ────────────────────────────────────────────────────────────
+   Each theme is one block: `:root[data-theme="<name>"]`. The
+   default theme uses `:root` directly so the page renders
+   without JS. Add a new theme by copying any block below,
+   renaming it, and changing the values. See:
+   /docs/guides/theming
+   ──────────────────────────────────────────────────────────── */
+
+/* ── light (default, no data-theme attribute or data-theme="light") ── */
+:root,
+:root[data-theme="light"] {
+    /* brand palette */
+    --brand:       #8115dd;
+    --brand-soft:  #f0e4fd;
+    --brand-wash:  #d4b5f8;
+    --brand-deep:  #2f2b82;
+    --brand-mid:   #ba79f2;
+
+    /* text */
+    --ink:    #2c2c3a;   /* h1/h2 colour */
+    --text:   #44445a;   /* body */
+    --muted:  #6b6b85;   /* metadata, captions */
+    --subtle: #9898b0;   /* placeholders, eyebrows */
+
+    /* surfaces */
+    --line:   #e4e4ee;   /* borders */
+    --soft:   #f0f0f8;   /* cards */
+    --tint:   #f8f7fd;   /* hover/zebra rows */
+    --paper:  #ffffff;   /* page background */
+    --code:   #15122b;   /* code block background */
+    --hdr-bg: rgba(255, 255, 255, 0.95);
+
+    /* typography */
+    --sans:  "Inter", system-ui, sans-serif;
+    --serif: "Fraunces", Georgia, serif;
+    --mono:  "JetBrains Mono", ui-monospace, monospace;
+
+    /* layout */
+    --nav: 260px;        /* left sidebar width */
+    --hdr: 58px;         /* header height */
+
+    color-scheme: light;
+}
+
+/* ── dark ── */
+:root[data-theme="dark"] {
+    --brand:       #b27ef0;
+    --brand-soft:  #2d1a4d;
+    --brand-wash:  #5d2c9a;
+    --brand-deep:  #b27ef0;
+    --brand-mid:   #8e5dd6;
+
+    --ink:    #eef0fb;
+    --text:   #c5c8de;
+    --muted:  #8a8ea8;
+    --subtle: #6a6e88;
+
+    --line:   #2a2840;
+    --soft:   #1a1830;
+    --tint:   #16142a;
+    --paper:  #0f0c24;
+    --code:   #050314;
+    --hdr-bg: rgba(15, 12, 36, 0.92);
+
+    color-scheme: dark;
+}
+
+/* ── ocean (sample custom theme — copy this block to start your own) ── */
+:root[data-theme="ocean"] {
+    --brand:       #0891b2;
+    --brand-soft:  #cffafe;
+    --brand-wash:  #67e8f9;
+    --brand-deep:  #0e3a4d;
+    --brand-mid:   #22d3ee;
+
+    --ink:    #0f2a3a;
+    --text:   #1e3a52;
+    --muted:  #4a6c84;
+    --subtle: #7d9bb0;
+
+    --line:   #d6e6f0;
+    --soft:   #ecf5fb;
+    --tint:   #f5fafd;
+    --paper:  #ffffff;
+    --code:   #082a3d;
+    --hdr-bg: rgba(255, 255, 255, 0.95);
+
+    color-scheme: light;
+}
+
+/* ── paper (warm cream + sepia, "printed book" feel) ── */
+:root[data-theme="paper"] {
+    --brand:       #9a3412;   /* aged book stamp */
+    --brand-soft:  #fef0e0;
+    --brand-wash:  #fbbf95;
+    --brand-deep:  #5e1f08;
+    --brand-mid:   #d97757;
+
+    --ink:    #2a1d10;        /* dark espresso */
+    --text:   #3f2e1c;
+    --muted:  #6b5a45;
+    --subtle: #9a8870;
+
+    --line:   #e8dcc4;
+    --soft:   #f5edde;
+    --tint:   #faf3e6;
+    --paper:  #fdf8f0;        /* warm cream — the page background */
+    --code:   #1f1610;
+    --hdr-bg: rgba(253, 248, 240, 0.95);
+
+    color-scheme: light;
+}

@@ -1,0 +1,111 @@
+---
+title: "Project structure"
+description: "What's in a scaffolded doks project. And where the framework lives."
+category: "getting-started"
+tags: ["structure", "layout", "files"]
+chunk_id: "docs-project-structure"
+icon: "folder"
+order: 2
+vector_metadata:
+  importance: 0.75
+  related_topics: ["quickstart", "install", "site-config"]
+  code_languages: ["text"]
+---
+
+A doks project is a thin Next.js app that imports the framework from the
+`doks-core` npm package. You own the content, branding, and config; the
+framework owns the renderer, components, and data layer.
+
+### <Chunk id="ps-tree" importance={0.85} tags={["tree", "directories", "scaffold"]}>What `npx create-doks` writes</Chunk>
+
+After `npx create-doks my-docs`, your project looks like this:
+
+```
+my-docs/
+├── app/
+│   ├── api/docs/search/route.ts    ← re-exports POST/GET from 'doks-core/api/search'
+│   ├── docs/[[...slug]]/page.tsx   ← re-exports DocPage from 'doks-core'
+│   ├── globals.css                 ← @import 'doks-core/styles.css';
+│   ├── layout.tsx                  ← passes siteConfig to <DocsShell>
+│   └── page.tsx                    ← redirects / → /docs
+├── content/docs/                   ← your MDX (this is what you write)
+├── lib/
+│   └── site.config.ts              ← brand/strings. Implements SiteConfig
+├── public/
+│   ├── light.svg
+│   └── dark.svg
+├── data/
+│   └── docs.db                     ← gitignored. Built by `npm run ingest`
+├── next.config.mjs                 ← transpilePackages: ['doks-core']
+├── postcss.config.mjs              ← Tailwind via @tailwindcss/postcss
+├── tsconfig.json
+└── package.json                    ← dep on doks-core (peerDeps: next/react)
+```
+
+Notice what's **not** here: no `components/`, no framework `lib/db.ts`, no
+`scripts/ingest.ts`. Those live in `node_modules/doks-core` after install.
+
+### <Chunk id="ps-content-dir" importance={0.85} tags={["content", "mdx", "authoring"]}>The `content/docs` directory</Chunk>
+
+This is the only directory you touch for normal authoring. The file path
+becomes the URL:
+
+| File path | URL |
+| --- | --- |
+| `content/docs/index.mdx` | `/docs` |
+| `content/docs/guides/foo.mdx` | `/docs/guides/foo` |
+| `content/docs/api/v2/index.mdx` | `/docs/api/v2` |
+
+A directory becomes a sidebar category. Page order inside a category is
+controlled by the `order` field in frontmatter. See
+[Frontmatter reference](/docs/reference/frontmatter).
+
+### <Chunk id="ps-site-config" importance={0.85} tags={["config", "branding", "site-config"]}>`lib/site.config.ts`</Chunk>
+
+Holds every brand string for your project. Site name, logo text, GitHub URL,
+CTA, default theme. The `<DocsShell>` and `<Header>` read it; the MDX
+`<SiteName />` and `<GithubUrl />` components inline it. See the
+[site config reference](/docs/reference/site-config) for every field.
+
+### <Chunk id="ps-app-dir" importance={0.7} tags={["app", "nextjs", "thin-wrapper"]}>The `app/` directory</Chunk>
+
+Mostly thin wrappers around `doks-core` exports. The two files worth knowing:
+
+- **`app/layout.tsx`**. Builds the doc tree and Spotlight list with
+  `buildDocTree()` / `getAllDocs()` from doks-core, then renders `<DocsShell>`
+  with your `siteConfig`. This is where you'd customize the `<head>`, fonts,
+  or wrap the page in additional providers.
+- **`app/globals.css`**. `@import 'doks-core/styles.css';` plus any overrides
+  you want. The framework's CSS is the source of truth; your overrides
+  cascade after it.
+
+The other files (`page.tsx`, `docs/[[...slug]]/page.tsx`,
+`api/docs/search/route.ts`) are one-liner re-exports. You shouldn't normally
+need to touch them.
+
+### <Chunk id="ps-framework" importance={0.7} tags={["framework", "doks-core", "node-modules"]}>Where the framework lives</Chunk>
+
+The renderer, components, ingest pipeline, and data layer live in
+`node_modules/doks-core/`:
+
+```
+node_modules/doks-core/
+├── dist/                   ← compiled JS + .d.ts (entry: dist/index.js)
+├── src/styles/             ← globals.css, themes.css
+├── bin/doks.js             ← `doks upgrade` CLI
+└── migrations/             ← X.Y.Z.js scripts run on upgrade
+```
+
+You don't edit anything here. Those edits get blown away on every
+`npm install`. To customize behavior, override at the consumer level
+(`app/globals.css` for styles, `lib/site.config.ts` for branding,
+`app/layout.tsx` for shell composition).
+
+### <Chunk id="ps-data-dir" importance={0.7} tags={["data", "sqlite", "gitignore"]}>The `data` directory</Chunk>
+
+`data/docs.db` is the SQLite file the ingest script writes and the search
+route reads. It is gitignored. Regenerate it locally with `npm run ingest`,
+and as part of your build pipeline before deploying.
+
+The `data/` directory is created on first run, so you don't need to make it
+yourself.

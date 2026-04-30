@@ -1,0 +1,138 @@
+---
+title: "Menu ordering (_meta.json)"
+description: "One central JSON file controls every label and sort order in the left sidebar."
+category: "reference"
+tags: ["sidebar", "menu", "ordering", "_meta.json", "navigation"]
+chunk_id: "docs-menu-ordering"
+icon: "list"
+order: 6
+vector_metadata:
+  importance: 0.7
+  related_topics: ["frontmatter", "site-config"]
+  code_languages: ["json"]
+---
+
+The left sidebar is laid out by **one file**:
+`apps/site/content/docs/_meta.json`. Each entry maps a slug path to its
+`label`, `order`, and visibility. There are no per-folder configs to chase;
+everything that affects the navigation tree lives in this single file.
+
+### <Chunk id="meta-shape" importance={0.95} tags={["_meta.json", "schema", "shape"]}>Shape</Chunk>
+
+A flat object keyed by slug path:
+
+```json
+// content/docs/_meta.json
+{
+  "overview":           { "order": 0 },
+  "samples":            { "label": "Samples",         "order": 1 },
+  "samples/components": { "label": "Components",      "order": 1 },
+  "samples/archetypes": { "label": "Archetypes",      "order": 2 },
+  "getting-started":    { "label": "Getting Started", "order": 2 },
+  "core-concepts":      { "label": "Core Concepts",   "order": 3 },
+  "guides":             { "label": "Guides",          "order": 4 },
+  "reference":          { "label": "Reference",       "order": 5 }
+}
+```
+
+The keys:
+
+- **Top-level docs**: use the slug part. Except `index.mdx` (root) is
+  addressable as `"overview"`.
+- **Top-level folders**: use the folder name (`"samples"`).
+- **Nested folders**: slash-separated path (`"samples/components"`).
+
+### <Chunk id="meta-fields" importance={0.85} tags={["_meta.json", "fields"]}>Fields</Chunk>
+
+| Field | Type | Default | Effect |
+| --- | --- | --- | --- |
+| `label` | `string` | auto-titlecased name | Display name for the category header. Ignored on doc nodes (those use frontmatter `title`). |
+| `order` | `number` | inherited from first child doc | Sort position among siblings. Lower = earlier. |
+| `hidden` | `boolean` | `false` | Drop the entry from the sidebar entirely. Pages still resolve at their URL. |
+| `collapsed` | `boolean` | `false` | Initial collapsed state. Currently informational; sidebar always renders open. |
+
+All fields are optional. An entry's metadata only needs the fields you want
+to override.
+
+### <Chunk id="meta-precedence" importance={0.7} tags={["_meta.json", "precedence", "rules"]}>Precedence</Chunk>
+
+When the same property is set in multiple places, the closest one wins:
+
+1. **`_meta.json`**. Overrides everything else for label / order / visibility.
+2. **Frontmatter `order:`**. Applies to leaf doc nodes inside a category.
+   Use this for fine-grained ordering of pages *within* a section, not for
+   top-level layout.
+3. **Implicit fallback**. Categories inherit their order from the first
+   doc the tree builder encounters. Brittle; that's why `_meta.json` exists.
+
+### <Chunk id="meta-reorder" importance={0.7} tags={["_meta.json", "reorder", "example"]}>Reordering the sidebar</Chunk>
+
+Want `Reference` second from the top? Edit one number:
+
+```json
+{
+  "overview":        { "order": 0 },
+  "reference":       { "label": "Reference", "order": 1 },
+  "samples":         { "label": "Samples", "order": 2 },
+  "getting-started": { "label": "Getting Started", "order": 3 }
+}
+```
+
+Save, the dev server hot-reloads, and the sidebar reflows. No frontmatter
+edits, no folder shuffling.
+
+### <Chunk id="meta-rename" importance={0.6} tags={["_meta.json", "rename", "label"]}>Renaming a category</Chunk>
+
+Folder names become URLs (`getting-started` → `/docs/getting-started/...`),
+so you can't always rename them freely. The `label` field decouples display
+from URL:
+
+```json
+{
+  "getting-started": { "label": "Quick start", "order": 2 }
+}
+```
+
+The URL stays `/docs/getting-started/...`; the sidebar shows
+**Quick start**.
+
+### <Chunk id="meta-hide" importance={0.55} tags={["_meta.json", "hidden", "draft"]}>Hiding a folder</Chunk>
+
+Set `"hidden": true` to keep the pages addressable but drop the folder from
+the sidebar. Useful for drafts, internal-only sections, or pages reachable
+only via search:
+
+```json
+{
+  "internal": { "label": "Internal", "hidden": true }
+}
+```
+
+The pages inside still build and ingest into the search index. They just
+don't appear in the navigation tree.
+
+### <Chunk id="meta-leaf-pages" importance={0.55} tags={["frontmatter", "ordering"]}>Ordering pages inside a category</Chunk>
+
+`_meta.json` controls *category-level* layout. To order the *pages* inside
+a category, keep using each MDX file's frontmatter:
+
+```mdx
+---
+title: "Quickstart"
+order: 1
+---
+```
+
+Pages with the same `order` are then sorted by their slug alphabetically.
+This keeps the central file focused on structure while leaving local
+sequencing where it belongs.
+
+### <Chunk id="meta-best-practices" importance={0.5} tags={["_meta.json", "best-practices"]}>Best practices</Chunk>
+
+- **One file, all decisions.** Editing the sidebar is a one-stop edit, not a
+  treasure hunt.
+- **Reserve frontmatter `order:` for in-category sequencing.** It's still
+  the right tool for ordering pages inside a section.
+- **Commit `_meta.json` to git.** It's configuration, not generated.
+- **Keep `order` numbers spaced out** (0, 1, 2, …) so you can slot new
+  entries in without renumbering everything.

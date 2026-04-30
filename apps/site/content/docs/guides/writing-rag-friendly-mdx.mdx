@@ -1,0 +1,86 @@
+---
+title: "Writing RAG-friendly MDX"
+description: "Authoring guide for documentation that retrieves well."
+category: "guides"
+tags: ["authoring", "mdx", "rag", "best-practices"]
+chunk_id: "docs-rag-authoring-guide"
+icon: "book"
+order: 2
+vector_metadata:
+  importance: 0.8
+  related_topics: ["chunks", "embeddings", "frontmatter"]
+  code_languages: ["mdx"]
+---
+
+This is the rulebook for authors. Every page in doks should be readable as a normal docs page **and** retrievable as a set of self-contained chunks.
+
+### <Chunk id="rag-frontmatter" importance={0.9} tags={["frontmatter", "metadata"]}>Frontmatter checklist</Chunk>
+
+Every MDX file must declare:
+
+- `title`. Used as the page heading and in retrieval results
+- `description`. One sentence, indexed alongside the body
+- `category`. Coarse grouping (e.g. `core-concepts`, `guides`, `reference`)
+- `tags`. 3–7 retrieval keywords
+- `chunk_id`. Globally unique, kebab-case, prefixed with `docs-`
+- `vector_metadata`. At minimum, an `importance` between 0 and 1
+- `icon` *(optional)*. Left sidebar icon name (e.g. `lock`, `book`, `bolt`)
+
+```yaml
+---
+title: "Authentication Overview"
+description: "How authentication works in doks."
+category: "core-concepts"
+tags: ["auth", "jwt", "session"]
+chunk_id: "docs-auth-overview"
+icon: "lock"
+vector_metadata:
+  importance: 0.9
+  related_topics: ["oauth", "rbac"]
+  code_languages: ["typescript"]
+---
+```
+
+### <Chunk id="rag-chunk-tag" importance={0.95} tags={["chunk", "syntax"]}>The `<Chunk>` tag</Chunk>
+
+Wrap each retrievable section in `<Chunk id="...">`. The `id` becomes the primary key for that row in the vector store, so it must be:
+
+- Unique within the page
+- Stable. Renaming an `id` orphans its embedding
+- Kebab-case, ideally prefixed with the page's topic (e.g. `auth-jwt-flow`)
+
+```mdx
+### <Chunk id="auth-jwt-flow" importance={0.95} tags={["jwt"]}>JWT issuance flow</Chunk>
+
+When a user signs in, ...
+```
+
+`importance` (0–1) and `tags` (string[]) are read by the ingestion script and stored as filter metadata in the vector store.
+
+### <Chunk id="rag-self-contained" importance={0.85} tags={["writing", "style"]}>Write self-contained chunks</Chunk>
+
+When the retriever surfaces a chunk to the LLM, the surrounding page is **not** in the prompt. Each chunk has to make sense on its own.
+
+<Callout type="tip" title="Practical rules">
+  - State the topic in the first sentence. Don't rely on the heading alone
+  - Resolve pronouns and "as above" / "see below" references
+  - If a chunk depends on a definition from earlier on the page, restate it briefly
+  - Inline code samples should be runnable without imports from elsewhere on the page
+</Callout>
+
+### <Chunk id="rag-chunk-size" importance={0.7} tags={["sizing", "tuning"]}>Chunk sizing</Chunk>
+
+Aim for **150–500 words per chunk**. Below 100 words there's not enough signal for embeddings to be discriminative; above 800 the embedding starts averaging multiple topics.
+
+If a section needs to be longer, split it into a parent chunk that explains the overall idea and child chunks for each step or sub-topic.
+
+### MDX components reference
+
+| Component | Purpose |
+|---|---|
+| `<Hero>` | Landing-page banner with eyebrow, title, description, CTAs |
+| `<QJump>` / `<QCard>` | Quick-jump grid of cards |
+| `<Callout type="tip" \| "warn" \| "note">` | Boxed inline guidance |
+| `<Tabs>` / `<Tab label="...">` | Switchable content panels |
+| `<Steps>` / `<Step title="...">` | Numbered procedural lists |
+| `<Chunk id="...">` | Marks a retrievable RAG unit |
