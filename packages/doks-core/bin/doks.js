@@ -20,11 +20,23 @@ doks. Framework CLI
 Usage:
   doks upgrade [--dry-run]      Bump doks-core to the latest npm version and
                                 run any pending migrations.
-  doks d1:init [--remote]       Print the D1 schema (pipe into wrangler) or,
-                                with --remote, run it against a configured D1.
-                                Wrangler must be installed in the project.
+  doks d1:init [--remote <db>]  Print the D1 schema (pipe into wrangler) or,
+                                with --remote/--local, run it against a
+                                configured D1. Wrangler must be installed.
   doks d1:init --local <db>     Run the schema against a local D1 (wrangler
                                 d1 execute --local).
+  doks setup-cloudflare         One-shot Cloudflare provisioner: creates a
+                                D1 database, an R2 bucket, runs the chunks
+                                schema, and prints a wrangler.jsonc snippet
+                                to merge. Wrangler must be installed and
+                                authenticated (\`npx wrangler login\`).
+                                Flags:
+                                  --db <name>      D1 database name
+                                  --bucket <name>  R2 bucket name (cache)
+                                  --worker <name>  Worker name
+                                  --skip-d1        skip D1 create+schema
+                                  --skip-r2        skip R2 bucket create
+                                  --skip-schema    skip running chunks schema
   doks --help                   Show this help.
 
 Run inside a project that has 'doks-core' as a dependency.
@@ -90,6 +102,147 @@ function d1Init(args) {
       /* ignore */
     }
   }
+}
+
+function setupCloudflare(args) {
+  const cwd = process.cwd();
+  const { pkg } = readUserPkg(cwd);
+  const projectSlug = String(pkg.name || 'doks-site')
+    .replace(/^@[^/]+\//, '')
+    .replace(/[^a-z0-9-]/gi, '-')
+    .toLowerCase()
+    .replace(/^-+|-+$/g, '') || 'doks-site';
+
+  const flagValue = (name) => {
+    const i = args.indexOf(name);
+    if (i < 0) return null;
+    const v = args[i + 1];
+    return v && !v.startsWith('-') ? v : null;
+  };
+
+  const worker = flagValue('--worker') || projectSlug;
+  const db = flagValue('--db') || `${projectSlug}-vectors`;
+  const bucket = flagValue('--bucket') || `${projectSlug}-cache`;
+  const skipD1 = args.includes('--skip-d1');
+  const skipR2 = args.includes('--skip-r2');
+  const skipSchema = args.includes('--skip-schema');
+
+  console.log('▸ doks setup-cloudflare');
+  console.log(`  worker: ${worker}`);
+  console.log(`  d1:     ${skipD1 ? '(skipped)' : db}`);
+  console.log(`  r2:     ${skipR2 ? '(skipped)' : bucket}`);
+  console.log('');
+
+  let dbId = null;
+  if (!skipD1) {
+    console.log(`▸ wrangler d1 create ${db}`);
+    let out;
+    try {
+      out = execSync(`npx wrangler d1 create ${db}`, { encoding: 'utf8' });
+      process.stdout.write(out);
+    } catch (e) {
+      const stderr = String(e.stderr || e.stdout || '');
+      if (/already exists/i.test(stderr)) {
+        console.log(`  ⚠ D1 '${db}' already exists. Skipping create.`);
+        console.log(
+          `  Look up the database_id with: npx wrangler d1 list`,
+        );
+      } else {
+        fail(
+          `wrangler d1 create failed:\n${stderr || e.message}\n\n` +
+            `Authenticate with \`npx wrangler login\` and try again.`,
+        );
+      }
+    }
+    if (out) {
+      const m = out.match(/database_id\s*=\s*"([0-9a-f-]{36})"/i);
+      if (m) dbId = m[1];
+    }
+
+    if (!skipSchema) {
+      console.log(`▸ running chunks schema against ${db}`);
+      const tmp = join(cwd, '.doks-d1-init.sql');
+      try {
+        writeFileSync(tmp, D1_SCHEMA);
+        execSync(
+          `npx wrangler d1 execute ${db} --remote --file=${tmp}`,
+          { stdio: 'inherit' },
+        );
+      } catch (e) {
+        console.error(`  ✗ schema failed: ${e.message}`);
+      } finally {
+        try { unlinkSync(tmp); } catch { /* ignore */ }
+      }
+    }
+  }
+
+  if (!skipR2) {
+    console.log(`▸ wrangler r2 bucket create ${bucket}`);
+    try {
+      execSync(`npx wrangler r2 bucket create ${bucket}`, {
+        stdio: 'inherit',
+      });
+    } catch (e) {
+      const stderr = String(e.stderr || '');
+      if (/already exists/i.test(stderr)) {
+        console.log(`  ⚠ R2 bucket '${bucket}' already exists. Skipping.`);
+      } else {
+        console.error(`  ⚠ r2 bucket create returned non-zero. Continuing.`);
+      }
+    }
+  }
+
+  // Emit a wrangler.jsonc snippet the user can merge into their config.
+  const snippet = {
+    $schema: 'node_modules/wrangler/config-schema.json',
+    name: worker,
+    main: '.open-next/worker.js',
+    compatibility_date: new Date().toISOString().slice(0, 10),
+    compatibility_flags: ['nodejs_compat'],
+    observability: { enabled: true },
+    assets: {
+      directory: '.open-next/assets',
+      binding: 'ASSETS',
+    },
+    services: [
+      { binding: 'WORKER_SELF_REFERENCE', service: worker },
+    ],
+    ...(skipD1
+      ? {}
+      : {
+          d1_databases: [
+            {
+              binding: 'DB',
+              database_name: db,
+              database_id: dbId || '<paste-from-wrangler-output-above>',
+            },
+          ],
+        }),
+    ...(skipR2
+      ? {}
+      : {
+          r2_buckets: [
+            {
+              binding: 'NEXT_INC_CACHE_R2_BUCKET',
+              bucket_name: bucket,
+            },
+          ],
+        }),
+  };
+
+  console.log('');
+  console.log('▸ wrangler.jsonc snippet (merge into your file):');
+  console.log('');
+  console.log(JSON.stringify(snippet, null, 2));
+  console.log('');
+  console.log('Next steps:');
+  console.log('  1. Save the snippet above to wrangler.jsonc.');
+  console.log('  2. Switch lib/doks.config.ts to the D1 adapter (see docs).');
+  console.log('  3. Add `export { default } from "doks-core/cloudflare/open-next";`');
+  console.log('     to open-next.config.ts.');
+  console.log('  4. Ingest:');
+  console.log('       DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest');
+  console.log('  5. Deploy: npm run deploy');
 }
 
 function readUserPkg(cwd) {
@@ -182,6 +335,8 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   await upgrade({ dryRun: process.argv.includes('--dry-run') });
 } else if (cmd === 'd1:init') {
   d1Init(process.argv.slice(3));
+} else if (cmd === 'setup-cloudflare') {
+  setupCloudflare(process.argv.slice(3));
 } else {
   fail(`Unknown command: ${cmd}`, 2);
 }
