@@ -1,0 +1,343 @@
+---
+title: "Deployment"
+description: "Ship a doks site to Vercel, Cloudflare Workers, Netlify, or self-host. Picking the right vector store for your host."
+category: "guides"
+tags: ["deployment", "vercel", "cloudflare", "d1", "netlify", "production"]
+chunk_id: "guides-deployment"
+icon: "cloud"
+order: 6
+vector_metadata:
+  importance: 0.85
+  related_topics: ["site-config", "install", "search-api"]
+  code_languages: ["bash", "typescript", "json"]
+---
+
+A doks site is a standard Next.js app, so it deploys anywhere Next.js does.
+The only twist is the **vector store**: SQLite needs a Node runtime, D1 runs
+on the edge, and your choice has to match the host.
+
+### <Chunk id="deploy-pick-host" importance={0.85} tags={["host", "runtime", "store"]}>Picking a host (and a store)</Chunk>
+
+| Host | Runtime | Store | Difficulty |
+| --- | --- | --- | --- |
+| **Vercel** | Node | SQLite (default) | Easy. Push and go. |
+| **Netlify** | Node | SQLite (default) | Easy. Same shape as Vercel. |
+| **Railway / Render** | Node container | SQLite (default) | Easy. Pay-per-use. |
+| **Self-host (Docker)** | Node container | SQLite (default) | Medium. You handle TLS, restarts. |
+| **Cloudflare Workers** | Edge / V8 | D1 (required) | Higher. SQLite won't run; D1 needs explicit wiring. |
+
+For most docs sites, **Vercel + SQLite** is the path of least resistance.
+Switch to D1 only when you have a specific reason to be on Cloudflare.
+
+### <Chunk id="deploy-vercel" importance={0.9} tags={["vercel", "node", "sqlite"]}>Vercel (recommended for most projects)</Chunk>
+
+Free tier, automatic HTTPS, native Next.js support.
+
+```bash
+cd ~/your-project-dir
+npx vercel --prod
+```
+
+Or connect via the Vercel dashboard, point it at your GitHub repo, set
+**Root directory** to your project's root.
+
+#### Environment variables
+
+In the Vercel project's **Settings → Environment Variables**, set what you need:
+
+| Variable | Required? | What it does |
+| --- | --- | --- |
+| `VOYAGE_API_KEY` | Recommended | Real embeddings. Without it, retrieval is hash-fallback noise. |
+| `ANTHROPIC_API_KEY` | Optional | Powers the chat panel. |
+| `OPENAI_API_KEY` / `GEMINI_API_KEY` | Optional | Alternative chat providers. |
+
+#### Build command
+
+Default works. If you want the vector index rebuilt every deploy (rather
+than committed to git), set the build command to include ingest:
+
+```
+npm run ingest && npm run build
+```
+
+`data/docs.db` is written during build, then bundled into the deploy.
+
+That's it for Vercel. The default SQLite adapter just works because
+Vercel runs your routes on Node.
+
+### <Chunk id="deploy-cloudflare" importance={0.85} tags={["cloudflare", "workers", "d1", "edge"]}>Cloudflare Workers + D1</Chunk>
+
+Cloudflare Workers run on V8 isolates, not Node. `better-sqlite3` (the
+SQLite adapter's native dependency) **cannot run there**. doks ships a
+D1 adapter for exactly this case, but the path has more moving parts than
+Vercel.
+
+You'll need:
+
+| Tool / package | Why |
+| --- | --- |
+| `wrangler` | Cloudflare's CLI. Provisions D1, deploys workers. |
+| `@opennextjs/cloudflare` | Translates Next.js output into a Worker bundle. |
+| `@cloudflare/workers-types` | TypeScript types for `D1Database`, `getCloudflareContext`, etc. |
+
+`@cloudflare/workers-types` and `@opennextjs/cloudflare` are listed as
+**optional peer dependencies** of `doks-core`. Install them in your
+project when you wire D1:
+
+```bash
+npm install -D @cloudflare/workers-types @opennextjs/cloudflare wrangler
+```
+
+<Callout type="warn" title="Setup commands vs. CI commands">
+  `npx wrangler d1 create` is a **one-time** local setup command, not a CI
+  deploy command. Running it on every deploy fails because the database
+  already exists from the first run. Provision once, copy the database ID
+  into `wrangler.jsonc`, commit, and let CI use that.
+</Callout>
+
+#### Step 1. Provision the D1 database (once, locally)
+
+```bash
+cd ~/your-project-dir
+npx wrangler d1 create doks-vectors
+# Copy the printed database_id. You'll paste it in step 2.
+```
+
+#### Step 2. Bootstrap the schema
+
+The D1 adapter expects a `chunks` table with a specific shape. Pipe
+`doks-d1-bootstrap` into wrangler to create it:
+
+```bash
+npx doks-d1-bootstrap > schema.sql
+npx wrangler d1 execute doks-vectors --remote --file=./schema.sql
+```
+
+You can also call `await store.reset()` from inside a Worker once after
+deploy; the bootstrap CLI is the cleaner path because you don't need a
+deployed worker to use it.
+
+#### Step 3. Commit `wrangler.jsonc`
+
+```jsonc
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "your-worker-name",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    { "binding": "WORKER_SELF_REFERENCE", "service": "your-worker-name" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "doks-vectors",
+      "database_id": "<paste-from-step-1>"
+    }
+  ]
+}
+```
+
+Replace `your-worker-name` with the Worker name from your Cloudflare
+dashboard. Both occurrences must match (the `name` field and the
+`WORKER_SELF_REFERENCE` service). Mismatch is the most common deploy
+failure on Cloudflare.
+
+#### Step 4. Switch `lib/doks.config.ts` to the D1 adapter
+
+The D1 binding is only reachable per-request via
+`getCloudflareContext()` (it doesn't exist at module load), so export a
+**thunk** instead of a constructed store:
+
+```ts
+// lib/doks.config.ts
+import { createD1Store } from "doks-core/adapters/d1";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import type { VectorStore } from "doks-core";
+
+export const vectorStore = (): VectorStore =>
+  createD1Store(getCloudflareContext().env.DB);
+```
+
+`createSearchHandler` accepts a thunk and invokes it per request, so the
+search route file stays unchanged.
+
+#### Step 5. Drop `runtime = "nodejs"` from the search route
+
+```ts
+// app/api/docs/search/route.ts
+import { createSearchHandler } from "doks-core";
+import { vectorStore } from "@/lib/doks.config";
+
+// D1 runs on the edge. No need to force Node.
+export const dynamic = "force-dynamic";
+
+export const { POST, GET } = createSearchHandler(vectorStore);
+```
+
+#### Step 6. Set the project's deploy command
+
+In the Cloudflare dashboard (or your CI config):
+
+| Field | Value |
+| --- | --- |
+| Build command | `bun run build` (or `npm run build`) |
+| Deploy command | `npm run deploy` |
+| Version command | *empty* |
+| Root directory | `/` |
+
+`npm run deploy` resolves to `opennextjs-cloudflare build && opennextjs-cloudflare deploy`, which OpenNext writes into your `package.json` when you first run its migrate.
+
+<Callout type="warn" title="Don't put `wrangler d1 create` in the deploy command">
+  That's a setup command. The deploy command runs on **every** push;
+  `d1 create` would fail on the second deploy because the database
+  already exists, and even on the first it doesn't actually deploy
+  anything.
+</Callout>
+
+#### Step 7. Populate D1 with chunks (the ingest gap)
+
+D1 is empty after provisioning. The shipped `npm run ingest` script
+talks to SQLite locally and **cannot ingest into D1 directly** because
+your `lib/doks.config.ts` uses `getCloudflareContext()` (a Worker-only
+API). Until D1-aware ingest tooling lands, the workaround is a two-step
+sync:
+
+1. **Ingest into SQLite locally** with the SQLite-flavoured config:
+
+   ```ts
+   // lib/doks.config.ingest.ts (a separate file just for ingest)
+   import { createSqliteStore } from "doks-core/adapters/sqlite";
+   import type { VectorStore } from "doks-core";
+
+   export const vectorStore: VectorStore = createSqliteStore({
+     path: "data/docs.db",
+   });
+   ```
+
+   Run ingest pointed at this file:
+
+   ```bash
+   DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest
+   ```
+
+   (For now, `runIngest` only looks for `lib/doks.config.ts`. Track the
+   D1 ingest tooling work in the project's issues; the temporary path is
+   to swap the file content for the duration of the ingest, or write a
+   small custom script that imports `runIngest` from
+   `doks-core/scripts/ingest` and passes a `createSqliteStore()` directly.)
+
+2. **Mirror SQLite rows into D1** with a small script:
+
+   ```bash
+   # Export from SQLite
+   sqlite3 data/docs.db .dump > rows.sql
+   # Filter to just the INSERT statements for `chunks` and run against D1
+   grep '^INSERT INTO "chunks"' rows.sql > chunks-only.sql
+   npx wrangler d1 execute doks-vectors --remote --file=./chunks-only.sql
+   ```
+
+This is a known gap that a future release will smooth over with a
+`createD1HttpStore` adapter that talks to the Cloudflare API directly,
+removing the SQLite middleman.
+
+### <Chunk id="deploy-netlify" importance={0.65} tags={["netlify", "node"]}>Netlify, Railway, Render</Chunk>
+
+Same shape as Vercel. SQLite adapter just works on the Node runtimes.
+
+| Host | Quirks |
+| --- | --- |
+| **Netlify** | Use the Next.js runtime plugin (default for new sites). Build cmd `npm run build`; functions run on Node. |
+| **Railway** | Container-based; `npm run build && npm run start`. Pay-per-use. |
+| **Render** | Same as Railway. Web service + build command + start command. |
+
+Set `VOYAGE_API_KEY` and (optionally) `ANTHROPIC_API_KEY` in the host's
+env-var UI.
+
+### <Chunk id="deploy-self-host" importance={0.6} tags={["docker", "self-host", "vps"]}>Self-host on a VPS or Docker</Chunk>
+
+A standard Next.js app:
+
+```bash
+npm run ingest
+npm run build
+npm run start    # listens on $PORT
+```
+
+Use a process manager (systemd, pm2) and a reverse proxy (Caddy, nginx,
+Traefik) for TLS. Cheaper than managed hosts at scale, more setup
+upfront.
+
+A bare-bones Dockerfile:
+
+```dockerfile
+FROM node:20-bookworm
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+RUN npm run ingest
+RUN npm run build
+EXPOSE 3000
+CMD ["npm", "run", "start"]
+```
+
+Build and run:
+
+```bash
+docker build -t my-docs .
+docker run -p 3000:3000 -e VOYAGE_API_KEY=... my-docs
+```
+
+### <Chunk id="deploy-data-db" importance={0.7} tags={["data", "docs.db", "build", "ingest"]}>The `data/docs.db` artifact</Chunk>
+
+The SQLite file at `data/docs.db` is the vector index. It's gitignored
+because it's binary and changes every ingest. Two ways to get it onto
+your deploy:
+
+1. **Rebuild on every deploy.** Add `npm run ingest` to your build
+   command (`npm run ingest && npm run build`). The CI runs ingest before
+   bundling. Pro: index is always fresh. Con: ingest costs ~few cents per
+   build if you're paying Voyage by token.
+2. **Commit `data/docs.db` to git.** Override `.gitignore` for the file.
+   Pro: zero build-time cost. Con: bloats the repo if MDX changes a lot;
+   binary diffs in PRs are noisy.
+
+Option 1 is recommended unless your token cost is non-trivial.
+
+### <Chunk id="deploy-env-checklist" importance={0.7} tags={["env", "checklist", "production"]}>Env-var checklist before going live</Chunk>
+
+| Variable | Where it's read | Production-ready? |
+| --- | --- | --- |
+| `VOYAGE_API_KEY` | `lib/embed.ts` | Strongly recommended. Hash fallback is dev-only. |
+| `ANTHROPIC_API_KEY` | Chat route (when wired) | Required if you want chat answers. |
+| `OPENAI_API_KEY` | Chat route (alt provider) | Optional. |
+| `GEMINI_API_KEY` | Chat route (alt provider) | Optional. |
+| `NODE_ENV=production` | Next, doks-core caches | Set automatically by most hosts. |
+
+Without `VOYAGE_API_KEY`, search results will be near-random because the
+hash-embedder produces deterministic-but-meaningless vectors. Set it
+before announcing the site.
+
+### <Chunk id="deploy-troubleshooting" importance={0.65} tags={["deploy", "troubleshooting"]}>Common failures</Chunk>
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `Cannot find module './lib/chunks'` during ingest | Old `doks-core@<0.1.2` import-extension bug | `npm install doks-core@latest`, re-deploy. |
+| `Export GET doesn't exist in target module` | Project is on 0.1.x route shape, `doks-core` is 0.2+ | Run `npx doks upgrade` locally, commit, push. |
+| `better-sqlite3 ... NODE_MODULE_VERSION` mismatch | Build environment Node version differs from local | Pin Node version in your host (e.g. `engines.node: ">=20"` in `package.json`, plus a host-specific Node setting). |
+| `Service binding 'WORKER_SELF_REFERENCE' references Worker '...' which was not found` (Cloudflare) | wrangler.jsonc not committed; OpenNext migrate auto-generates it with mismatched names every build | Commit a `wrangler.jsonc` with consistent `name` and `services` (see Cloudflare section). |
+| Search returns empty `{results: []}` in production | `data/docs.db` not present at runtime | Add `npm run ingest` to build command, or commit the file. |
+| Native module fails on Cloudflare Workers | Using SQLite adapter on V8 isolate | Switch `lib/doks.config.ts` to `createD1Store`. |
+
+### <Chunk id="deploy-summary" importance={0.5} tags={["summary"]}>Picking your path in one sentence</Chunk>
+
+- **Most users**: Vercel, SQLite, push-and-go.
+- **Cloudflare-required**: Workers + D1, with the wrangler config committed and a one-time `wrangler d1 create`.
+- **Self-hosted**: Docker container with Node 20+, SQLite, behind a reverse proxy.
