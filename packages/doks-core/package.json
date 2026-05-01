@@ -1,11 +1,12 @@
 {
   "name": "doks-core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "doks": "./bin/doks.js"
+    "doks": "./bin/doks.js",
+    "doks-d1-bootstrap": "./bin/d1-bootstrap.js"
   },
   "exports": {
     ".": "./dist/index.js",
@@ -54,7 +55,17 @@
   "peerDependencies": {
     "next": ">=15",
     "react": ">=19",
-    "react-dom": ">=19"
+    "react-dom": ">=19",
+    "@cloudflare/workers-types": "*",
+    "@opennextjs/cloudflare": "*"
+  },
+  "peerDependenciesMeta": {
+    "@cloudflare/workers-types": {
+      "optional": true
+    },
+    "@opennextjs/cloudflare": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@mdx-js/loader": "^3.1.0",

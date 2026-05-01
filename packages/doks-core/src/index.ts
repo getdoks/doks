@@ -40,5 +40,13 @@ export type { SiteConfig } from './types/SiteConfig';
 export type { ChunkRow, SearchResult, VectorStore } from './types/VectorStore';
 export { createSearchHandler } from './api/searchRoute';
 export type { SearchHandler } from './api/searchRoute';
-export { runIngest } from './scripts/ingest';
-export type { RunIngestOptions } from './scripts/ingest';
+
+// `runIngest` is intentionally NOT re-exported from the top-level barrel.
+// It transitively imports the SQLite adapter (via the loadConsumerStore
+// fallback) which would drag `better-sqlite3` into every consumer bundle,
+// including edge-runtime ones. Import it from the subpath when needed:
+//
+//   import { runIngest } from 'doks-core/scripts/ingest';
+//
+// In practice consumers don't need it; they invoke ingest via the CLI
+// (`tsx node_modules/doks-core/dist/scripts/ingest.js`).

@@ -19,20 +19,48 @@ export interface SearchHandler {
 }
 
 /**
- * Build a Next.js route handler bound to a specific `VectorStore`. Use it
+ * A `VectorStore` directly, or a thunk that returns one (sync or async).
+ * The thunk form is needed when the store can't be constructed at module
+ * load — most notably on Cloudflare Workers, where the D1 binding only
+ * becomes reachable per-request via `getCloudflareContext()`.
+ */
+export type VectorStoreInput =
+  | VectorStore
+  | (() => VectorStore | Promise<VectorStore>);
+
+/**
+ * Build a Next.js route handler bound to a `VectorStore`. Accepts either
+ * a store directly or a function that returns one (sync or async). Use it
  * in `app/api/docs/search/route.ts`:
  *
  * ```ts
+ * // Eager — store available at module load (SQLite, in-process).
  * import { createSearchHandler } from 'doks-core';
  * import { vectorStore } from '@/lib/doks.config';
  *
  * export const { POST, GET } = createSearchHandler(vectorStore);
- * // Optional: declare the runtime your store needs.
- * // export const runtime = 'nodejs';      // SQLite
- * // export const runtime = 'edge';        // D1
  * ```
+ *
+ * ```ts
+ * // Lazy — store needs per-request access to bindings (Cloudflare D1).
+ * import { createSearchHandler } from 'doks-core';
+ * import { createD1Store } from 'doks-core/adapters/d1';
+ * import { getCloudflareContext } from '@opennextjs/cloudflare';
+ *
+ * export const { POST, GET } = createSearchHandler(
+ *   () => createD1Store(getCloudflareContext().env.DB),
+ * );
+ * ```
+ *
+ * The lazy thunk is invoked once per request. Cache the result inside the
+ * thunk if construction is expensive.
  */
-export function createSearchHandler(store: VectorStore): SearchHandler {
+export function createSearchHandler(store: VectorStoreInput): SearchHandler {
+  const resolveStore: () => Promise<VectorStore> =
+    typeof store === 'function'
+      ? async () => await store()
+      : async () => store;
+
   async function POST(req: NextRequest): Promise<NextResponse> {
     let body: SearchRequest;
     try {
@@ -49,7 +77,8 @@ export function createSearchHandler(store: VectorStore): SearchHandler {
 
     try {
       const queryEmbedding = await embedOne(query, 'query');
-      const results = await store.search(queryEmbedding, topK);
+      const resolved = await resolveStore();
+      const results = await resolved.search(queryEmbedding, topK);
 
       return NextResponse.json({
         query,

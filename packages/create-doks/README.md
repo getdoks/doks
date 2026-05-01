@@ -46,7 +46,7 @@ npm run dev      # http://localhost:3000
 | `--no-samples` | Strip the demo content; start with a single `index.mdx`. (default) |
 | `--no-install` | Skip `npm install` after scaffolding. |
 | `-y`, `--yes` | Accept all defaults; useful for non-interactive scripts. |
-| `--template <spec>` | Use a different `degit` spec (default `getdoks/doks/apps/site`). |
+| `--template <spec>` | Use a different `degit` spec (default `getdoks/doks#v0.2.0/apps/site`, pinned to the tag matching this CLI version). |
 | `--template-path <dir>` | Copy from a local directory instead of cloning (used in CI / dev). |
 | `-h`, `--help` | Show usage. |
 

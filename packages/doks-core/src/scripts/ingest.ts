@@ -93,9 +93,7 @@ export async function runIngest(
 }
 
 // CLI entry point. Loads the consumer's vectorStore from
-// `lib/doks.config.ts` (relative to process.cwd()). If not found, falls
-// back to the SQLite adapter at the default path so 0.1.x consumers keep
-// working through `npx doks upgrade`.
+// `lib/doks.config.ts` (relative to process.cwd()).
 async function main() {
   const store = await loadConsumerStore();
   await runIngest(store);
@@ -107,18 +105,46 @@ async function loadConsumerStore(): Promise<VectorStore> {
     'lib/doks.config.js',
     'lib/doks.config.mjs',
   ];
+  const errors: { path: string; err: unknown }[] = [];
   for (const rel of tries) {
+    const url = `${process.cwd().replace(/\\/g, '/')}/${rel}`;
     try {
-      const url = `${process.cwd().replace(/\\/g, '/')}/${rel}`;
       const mod = await import(/* @vite-ignore */ url);
       if (mod.vectorStore) return mod.vectorStore as VectorStore;
-    } catch {
-      // try next candidate
+    } catch (err) {
+      errors.push({ path: rel, err });
     }
   }
-  // Fallback for legacy consumers: SQLite at data/docs.db.
-  const { createSqliteStore } = await import('../adapters/sqlite');
-  return createSqliteStore();
+  // No usable lib/doks.config.ts. Don't fall back to SQLite: that would
+  // drag `better-sqlite3` into every consumer bundle through static
+  // analysis, defeating the whole adapter split. Print a useful error
+  // instead and exit.
+  console.error(
+    [
+      '',
+      'doks: ingest could not load a `vectorStore` from your project.',
+      '',
+      'Expected one of:',
+      ...tries.map((p) => `  - ${p}`),
+      '',
+      'Each candidate must `export const vectorStore = ...;`.',
+      '',
+      'For SQLite (default):',
+      `  import { createSqliteStore } from "doks-core/adapters/sqlite";`,
+      `  export const vectorStore = createSqliteStore({ path: "data/docs.db" });`,
+      '',
+      'For D1: lib/doks.config.ts uses `getCloudflareContext()` and runs',
+      'inside a Worker, not under Node. The ingest CLI cannot import it.',
+      'Write a separate ingest script that talks to D1 over HTTP, or',
+      'ingest into SQLite locally and mirror rows into D1 with',
+      '`wrangler d1 execute --file=...`.',
+      '',
+      'Last error:',
+      String((errors.at(-1)?.err as Error)?.message ?? 'unknown'),
+      '',
+    ].join('\n'),
+  );
+  process.exit(1);
 }
 
 // Only run main() when this file is the script entry, not when imported.
