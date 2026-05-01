@@ -46,7 +46,7 @@ npm run dev      # http://localhost:3000
 | `--no-samples` | Strip the demo content; start with a single `index.mdx`. (default) |
 | `--no-install` | Skip `npm install` after scaffolding. |
 | `-y`, `--yes` | Accept all defaults; useful for non-interactive scripts. |
-| `--template <spec>` | Use a different `degit` spec (default `getdoks/doks#v0.2.0/apps/site`, pinned to the tag matching this CLI version). |
+| `--template <spec>` | Use a different `degit` spec (default `getdoks/doks#v0.2.3/apps/site`, pinned to the tag matching this CLI version). |
 | `--template-path <dir>` | Copy from a local directory instead of cloning (used in CI / dev). |
 | `-h`, `--help` | Show usage. |
 
@@ -79,12 +79,16 @@ my-docs/
 │   └── docs/[[...slug]]/page.tsx
 ├── content/docs/
 │   └── index.mdx              # your home page (or full demo corpus if you kept samples)
-├── lib/site.config.ts         # brand + theme config
+├── lib/
+│   ├── site.config.ts         # brand + theme config
+│   └── doks.config.ts         # vector-store adapter (SQLite by default)
 ├── public/
 │   ├── favicon.svg
 │   ├── logo.svg
 │   └── logo-dark.svg
-├── next.config.mjs
+├── next.config.mjs            # transpile + serverExternalPackages, with
+│                              # commented OpenNext dev hook for D1 setups
+├── open-next.config.ts        # one-line re-export from doks-core/cloudflare/open-next
 ├── postcss.config.mjs
 ├── tsconfig.json
 └── package.json               # depends on doks-core@latest
@@ -92,6 +96,22 @@ my-docs/
 
 Edit `content/docs/*.mdx` to write docs. Edit `lib/site.config.ts` to change
 branding. Re-run `npm run ingest` whenever you change MDX. Standard cycle.
+
+## Deploying
+
+The default SQLite adapter works on any Node host (Vercel, Netlify, Railway,
+Render, Docker). Cloudflare Workers needs the D1 + R2 path, which doks-core
+provides out of the box:
+
+```bash
+npm install -D @cloudflare/workers-types @opennextjs/cloudflare wrangler
+npx wrangler login
+npx doks setup-cloudflare        # creates D1 + R2, prints wrangler.jsonc
+```
+
+Then switch `lib/doks.config.ts` to `createD1Store` and follow the
+[Deployment guide](https://github.com/getdoks/doks/blob/main/apps/site/content/docs/guides/deployment.mdx)
+for the remaining wiring.
 
 ## Upgrading later
 
