@@ -46,6 +46,9 @@
     "LICENSE",
     "README.md"
   ],
+  "engines": {
+    "node": ">=20"
+  },
   "peerDependencies": {
     "next": ">=15",
     "react": ">=19",
