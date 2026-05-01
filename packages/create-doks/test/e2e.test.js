@@ -75,8 +75,8 @@ test('scaffolds with --samples (full demo corpus retained)', () => {
     );
     assert.match(
       pkg.scripts.ingest,
-      /node_modules\/doks-core\/dist\/scripts\/ingest\.js/,
-      'ingest script repointed',
+      /^tsx node_modules\/doks-core\/dist\/scripts\/ingest\.js/,
+      'ingest script repointed via tsx (loads lib/doks.config.ts)',
     );
 
     const cfg = readFileSync(join(target, 'lib/site.config.ts'), 'utf8');

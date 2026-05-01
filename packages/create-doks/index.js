@@ -206,12 +206,14 @@ function rewritePackageJson(target, { targetName }) {
     pkg.dependencies['doks-core'] = 'latest';
   }
   if (pkg.scripts && typeof pkg.scripts.ingest === 'string') {
+    // Repoint at the published path; keep tsx as the runtime so the
+    // dynamic import of `lib/doks.config.ts` works without compiling.
     pkg.scripts.ingest = pkg.scripts.ingest.replace(
       /\.\.\/\.\.\/packages\/doks-core\/(?:src|dist)\/scripts\/ingest\.(?:ts|js)/,
       'node_modules/doks-core/dist/scripts/ingest.js',
     );
-    if (pkg.scripts.ingest.startsWith('tsx ')) {
-      pkg.scripts.ingest = pkg.scripts.ingest.replace(/^tsx\b/, 'node');
+    if (!pkg.scripts.ingest.startsWith('tsx ')) {
+      pkg.scripts.ingest = `tsx ${pkg.scripts.ingest.replace(/^node\s+/, '')}`;
     }
   }
   writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
