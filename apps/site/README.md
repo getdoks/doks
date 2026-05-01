@@ -66,15 +66,27 @@ npx doks upgrade --dry-run # preview what would run
 
 ## Deployment
 
-Deploy as any Next.js app. The `/api/docs/search` route needs a Node.js
-runtime (native `better-sqlite3`). On Vercel:
+The default SQLite adapter needs a Node runtime (Vercel, Netlify,
+Railway, Render, Docker). Cloudflare Workers needs the D1 adapter
+instead. Both flows are covered in detail in the
+[Deployment guide](https://github.com/getdoks/doks/blob/main/apps/site/content/docs/guides/deployment.mdx).
 
-```bash
-npx vercel --prod
-```
+Quick paths:
 
-Set your env vars in the Vercel dashboard. `data/docs.db` must exist at
-build time. Run `npm run ingest` as a build step, or commit the artifact.
+- **Vercel** (most projects):
+
+  ```bash
+  npx vercel --prod
+  ```
+
+  Set `VOYAGE_API_KEY` and (optionally) `ANTHROPIC_API_KEY` in the dashboard.
+  `data/docs.db` must exist at build time, so add `npm run ingest` to your
+  build command, or commit the artifact.
+
+- **Cloudflare Workers**: switch `lib/doks.config.ts` to use
+  `createD1Store(DB)`, provision D1 once with `npx wrangler d1 create`,
+  commit a `wrangler.jsonc` with the binding, then deploy with
+  `npm run deploy`. See the deployment guide for the full step-by-step.
 
 ## License
 
