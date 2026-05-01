@@ -100,11 +100,19 @@ async function main() {
 }
 
 async function loadConsumerStore(): Promise<VectorStore> {
-  const tries = [
-    'lib/doks.config.ts',
-    'lib/doks.config.js',
-    'lib/doks.config.mjs',
-  ];
+  // DOKS_CONFIG overrides the default search order. Useful for D1 setups
+  // where the runtime config calls `getCloudflareContext()` (Worker-only)
+  // and ingest needs a separate SQLite-or-D1-HTTP config:
+  //
+  //   DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest
+  const explicit = process.env.DOKS_CONFIG;
+  const tries = explicit
+    ? [explicit]
+    : [
+        'lib/doks.config.ts',
+        'lib/doks.config.js',
+        'lib/doks.config.mjs',
+      ];
   const errors: { path: string; err: unknown }[] = [];
   for (const rel of tries) {
     const url = `${process.cwd().replace(/\\/g, '/')}/${rel}`;
@@ -134,10 +142,18 @@ async function loadConsumerStore(): Promise<VectorStore> {
       `  export const vectorStore = createSqliteStore({ path: "data/docs.db" });`,
       '',
       'For D1: lib/doks.config.ts uses `getCloudflareContext()` and runs',
-      'inside a Worker, not under Node. The ingest CLI cannot import it.',
-      'Write a separate ingest script that talks to D1 over HTTP, or',
-      'ingest into SQLite locally and mirror rows into D1 with',
-      '`wrangler d1 execute --file=...`.',
+      'inside a Worker, not under Node. Write a separate Node-friendly',
+      'config and point the ingest CLI at it:',
+      '',
+      '  // lib/doks.config.ingest.ts',
+      '  import { createD1HttpStore } from "doks-core/adapters/d1/http";',
+      '  export const vectorStore = createD1HttpStore({',
+      '    accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,',
+      '    databaseId: process.env.CLOUDFLARE_DATABASE_ID!,',
+      '    apiToken: process.env.CLOUDFLARE_API_TOKEN!,',
+      '  });',
+      '',
+      '  $ DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest',
       '',
       'Last error:',
       String((errors.at(-1)?.err as Error)?.message ?? 'unknown'),

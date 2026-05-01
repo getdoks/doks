@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 import { execSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,12 +18,78 @@ function help() {
 doks. Framework CLI
 
 Usage:
-  doks upgrade [--dry-run]   Bump doks-core to the latest npm version and
-                             run any pending migrations.
-  doks --help                Show this help.
+  doks upgrade [--dry-run]      Bump doks-core to the latest npm version and
+                                run any pending migrations.
+  doks d1:init [--remote]       Print the D1 schema (pipe into wrangler) or,
+                                with --remote, run it against a configured D1.
+                                Wrangler must be installed in the project.
+  doks d1:init --local <db>     Run the schema against a local D1 (wrangler
+                                d1 execute --local).
+  doks --help                   Show this help.
 
 Run inside a project that has 'doks-core' as a dependency.
 `);
+}
+
+const D1_SCHEMA = `DROP TABLE IF EXISTS chunks;
+CREATE TABLE chunks (
+  chunk_id   TEXT PRIMARY KEY,
+  page_href  TEXT NOT NULL,
+  page_title TEXT NOT NULL,
+  heading    TEXT NOT NULL,
+  category   TEXT,
+  importance REAL NOT NULL,
+  tags       TEXT NOT NULL,
+  text       TEXT NOT NULL,
+  embedding  BLOB NOT NULL
+);
+`;
+
+function d1Init(args) {
+  const remote = args.includes('--remote');
+  const localIdx = args.indexOf('--local');
+  const localDb = localIdx >= 0 ? args[localIdx + 1] : null;
+  const remoteIdx = args.indexOf('--remote');
+  const remoteDb =
+    remoteIdx >= 0 && args[remoteIdx + 1] && !args[remoteIdx + 1].startsWith('-')
+      ? args[remoteIdx + 1]
+      : null;
+
+  if (!remote && !localDb) {
+    // No flags: dump SQL to stdout for manual piping.
+    process.stdout.write(D1_SCHEMA);
+    return;
+  }
+
+  // Run via wrangler. Pass the schema on stdin.
+  const flag = remote
+    ? `--remote${remoteDb ? ` ${remoteDb}` : ''}`
+    : `--local ${localDb}`;
+  // Wrangler doesn't read SQL from stdin reliably across versions; write
+  // a temp file and use --file=.
+  const target = remote ? remoteDb : localDb;
+  if (!target) {
+    fail(
+      'doks d1:init: pass the database name. ' +
+        'Examples: `doks d1:init --remote my-db` or ' +
+        '`doks d1:init --local my-db`.',
+    );
+  }
+  const tmp = join(process.cwd(), '.doks-d1-init.sql');
+  try {
+    writeFileSync(tmp, D1_SCHEMA);
+    const cmd =
+      `npx wrangler d1 execute ${target} ` +
+      `${remote ? '--remote' : '--local'} --file=${tmp}`;
+    console.log(`▸ ${cmd}`);
+    execSync(cmd, { stdio: 'inherit' });
+  } finally {
+    try {
+      unlinkSync(tmp);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 function readUserPkg(cwd) {
@@ -108,6 +180,8 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
   process.exit(cmd ? 0 : 1);
 } else if (cmd === 'upgrade') {
   await upgrade({ dryRun: process.argv.includes('--dry-run') });
+} else if (cmd === 'd1:init') {
+  d1Init(process.argv.slice(3));
 } else {
   fail(`Unknown command: ${cmd}`, 2);
 }
