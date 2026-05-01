@@ -105,17 +105,28 @@ npx wrangler d1 create doks-vectors
 
 #### Step 2. Bootstrap the schema
 
-The D1 adapter expects a `chunks` table with a specific shape. Pipe
-`doks-d1-bootstrap` into wrangler to create it:
+The D1 adapter expects a `chunks` table with a specific shape. The
+`doks d1:init` subcommand runs the schema for you:
 
 ```bash
-npx doks-d1-bootstrap > schema.sql
+npx doks d1:init --remote doks-vectors
+```
+
+For a local D1 (e.g. when developing against `wrangler dev`):
+
+```bash
+npx doks d1:init --local doks-vectors
+```
+
+Or, if you want to inspect or edit the SQL first, dump it to stdout:
+
+```bash
+npx doks d1:init > schema.sql
 npx wrangler d1 execute doks-vectors --remote --file=./schema.sql
 ```
 
-You can also call `await store.reset()` from inside a Worker once after
-deploy; the bootstrap CLI is the cleaner path because you don't need a
-deployed worker to use it.
+`store.reset()` does the same thing from inside a Worker after deploy;
+the CLI is the cleaner path because you don't need a deployed worker.
 
 #### Step 3. Commit `wrangler.jsonc`
 
@@ -168,7 +179,31 @@ export const vectorStore = (): VectorStore =>
 `createSearchHandler` accepts a thunk and invokes it per request, so the
 search route file stays unchanged.
 
-#### Step 5. Drop `runtime = "nodejs"` from the search route
+#### Step 5. Wire `initOpenNextCloudflareForDev` into `next.config.mjs`
+
+`getCloudflareContext()` reads from a Worker context that doesn't exist
+under `next dev`. Without the OpenNext dev hook, every search request in
+local dev returns a 500. Add it to `next.config.mjs`:
+
+```js
+// next.config.mjs
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+
+initOpenNextCloudflareForDev();
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  transpilePackages: ["doks-core"],
+  serverExternalPackages: ["better-sqlite3", "sqlite-vec"],
+};
+
+export default nextConfig;
+```
+
+The scaffold ships this block commented out — uncomment it on the same
+commit that switches to D1.
+
+#### Step 6. Drop `runtime = "nodejs"` from the search route
 
 ```ts
 // app/api/docs/search/route.ts
@@ -181,7 +216,7 @@ export const dynamic = "force-dynamic";
 export const { POST, GET } = createSearchHandler(vectorStore);
 ```
 
-#### Step 6. Set the project's deploy command
+#### Step 7. Set the project's deploy command
 
 In the Cloudflare dashboard (or your CI config):
 
@@ -201,51 +236,41 @@ In the Cloudflare dashboard (or your CI config):
   anything.
 </Callout>
 
-#### Step 7. Populate D1 with chunks (the ingest gap)
+#### Step 8. Populate D1 with chunks
 
-D1 is empty after provisioning. The shipped `npm run ingest` script
-talks to SQLite locally and **cannot ingest into D1 directly** because
-your `lib/doks.config.ts` uses `getCloudflareContext()` (a Worker-only
-API). Until D1-aware ingest tooling lands, the workaround is a two-step
-sync:
+D1 is empty after provisioning. The runtime `lib/doks.config.ts` calls
+`getCloudflareContext()` — Worker-only — so `npm run ingest` can't reuse
+it. Add a Node-friendly ingest config that talks to the Cloudflare REST
+API directly:
 
-1. **Ingest into SQLite locally** with the SQLite-flavoured config:
+```ts
+// lib/doks.config.ingest.ts
+import { createD1HttpStore } from "doks-core/adapters/d1/http";
+import type { VectorStore } from "doks-core";
 
-   ```ts
-   // lib/doks.config.ingest.ts (a separate file just for ingest)
-   import { createSqliteStore } from "doks-core/adapters/sqlite";
-   import type { VectorStore } from "doks-core";
+export const vectorStore: VectorStore = createD1HttpStore({
+  accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,
+  databaseId: process.env.CLOUDFLARE_DATABASE_ID!,
+  apiToken: process.env.CLOUDFLARE_API_TOKEN!,
+});
+```
 
-   export const vectorStore: VectorStore = createSqliteStore({
-     path: "data/docs.db",
-   });
-   ```
+Create an API token with **Account → D1 → Edit** permission at
+[dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens).
+Then point ingest at the alternate config via `DOKS_CONFIG`:
 
-   Run ingest pointed at this file:
+```bash
+CLOUDFLARE_ACCOUNT_ID=... \
+CLOUDFLARE_DATABASE_ID=... \
+CLOUDFLARE_API_TOKEN=... \
+DOKS_CONFIG=lib/doks.config.ingest.ts \
+npm run ingest
+```
 
-   ```bash
-   DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest
-   ```
-
-   (For now, `runIngest` only looks for `lib/doks.config.ts`. Track the
-   D1 ingest tooling work in the project's issues; the temporary path is
-   to swap the file content for the duration of the ingest, or write a
-   small custom script that imports `runIngest` from
-   `doks-core/scripts/ingest` and passes a `createSqliteStore()` directly.)
-
-2. **Mirror SQLite rows into D1** with a small script:
-
-   ```bash
-   # Export from SQLite
-   sqlite3 data/docs.db .dump > rows.sql
-   # Filter to just the INSERT statements for `chunks` and run against D1
-   grep '^INSERT INTO "chunks"' rows.sql > chunks-only.sql
-   npx wrangler d1 execute doks-vectors --remote --file=./chunks-only.sql
-   ```
-
-This is a known gap that a future release will smooth over with a
-`createD1HttpStore` adapter that talks to the Cloudflare API directly,
-removing the SQLite middleman.
+`createD1HttpStore` implements the same `VectorStore` contract as the
+in-Worker D1 adapter, so the ingest pipeline (chunk extract → embed →
+upsert) is unchanged. Re-run after MDX edits the same way you would
+with SQLite.
 
 ### <Chunk id="deploy-netlify" importance={0.65} tags={["netlify", "node"]}>Netlify, Railway, Render</Chunk>
 
@@ -335,6 +360,8 @@ before announcing the site.
 | `Service binding 'WORKER_SELF_REFERENCE' references Worker '...' which was not found` (Cloudflare) | wrangler.jsonc not committed; OpenNext migrate auto-generates it with mismatched names every build | Commit a `wrangler.jsonc` with consistent `name` and `services` (see Cloudflare section). |
 | Search returns empty `{results: []}` in production | `data/docs.db` not present at runtime | Add `npm run ingest` to build command, or commit the file. |
 | Native module fails on Cloudflare Workers | Using SQLite adapter on V8 isolate | Switch `lib/doks.config.ts` to `createD1Store`. |
+| `next dev` 500s on `/api/docs/search` for D1 setups | `getCloudflareContext()` has no Worker context under `next dev` | Add `initOpenNextCloudflareForDev()` to `next.config.mjs` (see Cloudflare Step 5). |
+| `npm run ingest` errors on D1 setup with `getCloudflareContext is not defined` | Ingest tried to load the runtime `lib/doks.config.ts` | Create `lib/doks.config.ingest.ts` with `createD1HttpStore` and run `DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest`. |
 
 ### <Chunk id="deploy-summary" importance={0.5} tags={["summary"]}>Picking your path in one sentence</Chunk>
 
