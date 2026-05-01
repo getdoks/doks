@@ -16,6 +16,16 @@ npm install doks-core
 You typically don't install this directly. Run `npx create-doks my-docs`;
 the scaffold wires it up for you.
 
+### Requirements
+
+- **Node.js ≥ 20** (Next 15 requires `^18.18.0 || ^19.8.0 || >= 20.0.0`;
+  doks itself targets 20 so the workspace uses one consistent version).
+- **npm** (any recent version that supports workspaces).
+- A C toolchain for `better-sqlite3` to build native bindings:
+  - macOS: `xcode-select --install`
+  - Debian/Ubuntu: `sudo apt-get install -y build-essential`
+  - Windows: WSL is the path of least resistance.
+
 ## CLI
 
 ```
