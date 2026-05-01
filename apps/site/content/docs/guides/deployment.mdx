@@ -88,54 +88,50 @@ project when you wire D1:
 npm install -D @cloudflare/workers-types @opennextjs/cloudflare wrangler
 ```
 
-<Callout type="warn" title="Setup commands vs. CI commands">
-  `npx wrangler d1 create` is a **one-time** local setup command, not a CI
-  deploy command. Running it on every deploy fails because the database
-  already exists from the first run. Provision once, copy the database ID
-  into `wrangler.jsonc`, commit, and let CI use that.
+#### Step 1. Provision Cloudflare resources
+
+`doks setup-cloudflare` runs `wrangler d1 create`, `wrangler r2 bucket
+create`, and the chunks-table schema, then prints a complete
+`wrangler.jsonc` snippet to stdout:
+
+```bash
+npx wrangler login           # one-time auth, if not done
+npx doks setup-cloudflare
+```
+
+By default it derives names from your `package.json`:
+
+| Resource | Default name |
+| --- | --- |
+| Worker | `<package-name>` |
+| D1 database | `<package-name>-vectors` (binding `DB`) |
+| R2 bucket | `<package-name>-cache` (binding `NEXT_INC_CACHE_R2_BUCKET`) |
+
+Override any of them with flags: `--worker`, `--db`, `--bucket`. Skip a
+step with `--skip-d1`, `--skip-r2`, or `--skip-schema`.
+
+The R2 bucket backs OpenNext's incremental cache. Without it, SSG
+pages 500 on cache miss in production. The CLI wires the binding name
+the doks-core OpenNext config expects (`NEXT_INC_CACHE_R2_BUCKET`).
+
+<Callout type="warn" title="One-time setup, not a CI command">
+  `setup-cloudflare` is a **local provisioning** command. It creates
+  cloud resources, so re-running on every deploy will hit "already
+  exists" errors. Run once, save the printed `wrangler.jsonc`, commit,
+  and let CI use that.
 </Callout>
 
-#### Step 1. Provision the D1 database (once, locally)
+#### Step 2. Save the printed `wrangler.jsonc`
 
-```bash
-cd ~/your-project-dir
-npx wrangler d1 create doks-vectors
-# Copy the printed database_id. You'll paste it in step 2.
-```
-
-#### Step 2. Bootstrap the schema
-
-The D1 adapter expects a `chunks` table with a specific shape. The
-`doks d1:init` subcommand runs the schema for you:
-
-```bash
-npx doks d1:init --remote doks-vectors
-```
-
-For a local D1 (e.g. when developing against `wrangler dev`):
-
-```bash
-npx doks d1:init --local doks-vectors
-```
-
-Or, if you want to inspect or edit the SQL first, dump it to stdout:
-
-```bash
-npx doks d1:init > schema.sql
-npx wrangler d1 execute doks-vectors --remote --file=./schema.sql
-```
-
-`store.reset()` does the same thing from inside a Worker after deploy;
-the CLI is the cleaner path because you don't need a deployed worker.
-
-#### Step 3. Commit `wrangler.jsonc`
+Copy the snippet `setup-cloudflare` printed into `wrangler.jsonc` at
+your project root. It looks like:
 
 ```jsonc
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "your-worker-name",
   "main": ".open-next/worker.js",
-  "compatibility_date": "2026-05-01",
+  "compatibility_date": "2026-05-02",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "assets": {
@@ -148,17 +144,35 @@ the CLI is the cleaner path because you don't need a deployed worker.
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "doks-vectors",
-      "database_id": "<paste-from-step-1>"
+      "database_name": "your-worker-name-vectors",
+      "database_id": "<filled-in-by-setup-cloudflare>"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "your-worker-name-cache"
     }
   ]
 }
 ```
 
-Replace `your-worker-name` with the Worker name from your Cloudflare
-dashboard. Both occurrences must match (the `name` field and the
-`WORKER_SELF_REFERENCE` service). Mismatch is the most common deploy
-failure on Cloudflare.
+The `name` field and the `WORKER_SELF_REFERENCE` service must match the
+Worker name from your Cloudflare dashboard. Mismatch is the most common
+deploy failure.
+
+#### Step 3. Add `open-next.config.ts`
+
+```ts
+// open-next.config.ts
+export { default } from "doks-core/cloudflare/open-next";
+```
+
+That's it. `doks-core/cloudflare/open-next` ships a default config that
+wires R2 as the incremental cache (binding `NEXT_INC_CACHE_R2_BUCKET`,
+provisioned in step 1). To override the cache backend, export your own
+config from this file using `defineCloudflareConfig` from
+`@opennextjs/cloudflare`.
 
 #### Step 4. Switch `lib/doks.config.ts` to the D1 adapter
 
@@ -362,6 +376,7 @@ before announcing the site.
 | Native module fails on Cloudflare Workers | Using SQLite adapter on V8 isolate | Switch `lib/doks.config.ts` to `createD1Store`. |
 | `next dev` 500s on `/api/docs/search` for D1 setups | `getCloudflareContext()` has no Worker context under `next dev` | Add `initOpenNextCloudflareForDev()` to `next.config.mjs` (see Cloudflare Step 5). |
 | `npm run ingest` errors on D1 setup with `getCloudflareContext is not defined` | Ingest tried to load the runtime `lib/doks.config.ts` | Create `lib/doks.config.ingest.ts` with `createD1HttpStore` and run `DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest`. |
+| SSG pages 500 in production on Cloudflare with cache-related error | OpenNext incremental cache binding missing | Run `npx doks setup-cloudflare --skip-d1` to provision the R2 bucket, or add the `r2_buckets` block (binding `NEXT_INC_CACHE_R2_BUCKET`) to `wrangler.jsonc` manually. |
 
 ### <Chunk id="deploy-summary" importance={0.5} tags={["summary"]}>Picking your path in one sentence</Chunk>
 
