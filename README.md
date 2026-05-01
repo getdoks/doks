@@ -142,7 +142,7 @@ on `:root[data-theme="…"]`. Built-ins: `light`, `dark`, `blue-pearl`, `sand`.
 
 ## CLI
 
-After publish, two CLIs are available:
+Two CLIs are published on npm:
 
 ```bash
 npx create-doks my-docs       # scaffold a new project
@@ -150,7 +150,8 @@ npx doks upgrade              # bump doks-core + run pending migrations
                               # (run inside a doks project)
 ```
 
-Until then, work from the workspace.
+If you're hacking on the framework itself, work from the workspace
+(`npm run dev` at the root, etc.) instead of via the published packages.
 
 ---
 
@@ -182,6 +183,40 @@ artifact.
 - Breaking public-API changes need a migration in
   `packages/doks-core/migrations/<target-version>.js`. See
   [`packages/doks-core/migrations/README.md`](./packages/doks-core/migrations/README.md).
+
+### Building doks-core
+
+`packages/doks-core` ships compiled JS via `tsc` followed by a small
+`scripts/fix-extensions.mjs` postbuild step. The postbuild walks `dist/`
+and adds `.js` / `.jsx` / `/index.js` to extension-less relative imports,
+because Node's strict ESM resolver doesn't auto-resolve them and TypeScript
+doesn't rewrite import specifiers.
+
+The full build chain runs as part of `prepack`:
+
+```bash
+npm run build -w doks-core
+# tsc                                  → dist/*.js, dist/**/*.jsx, dist/**/*.d.ts
+# node scripts/fix-extensions.mjs      → rewrites imports inside dist
+```
+
+If a published `doks-core` ever errors with `Cannot find module './lib/X'`,
+the postbuild step didn't run. Republish with `npm publish -w doks-core`
+(it'll re-run via `prepack`) or fix locally and verify with
+`node node_modules/doks-core/dist/scripts/ingest.js` from a tarball install.
+
+### Releasing
+
+```bash
+npm version patch -w doks-core         # 0.1.0 → 0.1.1
+npm publish -w doks-core --access public
+
+# Then update create-doks if its DEFAULT_TEMPLATE pin needs to follow:
+npm version patch -w create-doks
+npm publish -w create-doks --access public
+
+git push --follow-tags                 # push the version tags too
+```
 
 ---
 
