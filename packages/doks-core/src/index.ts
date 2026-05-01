@@ -28,8 +28,17 @@ export { getAllDocs, getDocBySlug, buildDocTree, getDocNeighbors, extractToc }
 export type { DocMeta, DocNode, DocFrontmatter, TocItem, CategoryMeta } from './lib/docs';
 export { extractAllChunks } from './lib/chunks';
 export { embed, embedOne, hasVoyageKey, EMBED_DIM, EMBED_MODEL } from './lib/embed';
-export { getDb, initSchema, resetTables, insertChunkBatch, vectorSearch }
-  from './lib/db';
 
 // Config types (consumers implement)
 export type { SiteConfig } from './types/SiteConfig';
+
+// Vector-store contract (RFC 0001). Concrete adapters live under
+// `doks-core/adapters/<name>` (e.g. `doks-core/adapters/sqlite`) and are
+// wired by the consumer's `lib/doks.config.ts`. The top-level barrel
+// never pulls a backend, so importing `doks-core` from edge runtimes is
+// safe.
+export type { ChunkRow, SearchResult, VectorStore } from './types/VectorStore';
+export { createSearchHandler } from './api/searchRoute';
+export type { SearchHandler } from './api/searchRoute';
+export { runIngest } from './scripts/ingest';
+export type { RunIngestOptions } from './scripts/ingest';
