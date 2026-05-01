@@ -57,20 +57,29 @@ Root scripts delegate to the workspace:
 │   └── site/                       # consumer app (template body)
 │       ├── app/                    # thin Next.js wrappers
 │       ├── content/docs/           # demo MDX corpus
-│       ├── lib/site.config.ts      # USER-owned brand config
+│       ├── lib/
+│       │   ├── site.config.ts      # USER-owned brand config
+│       │   └── doks.config.ts      # vector-store adapter selection
 │       ├── public/                 # static assets (light.svg, dark.svg)
 │       ├── data/docs.db            # ingest output (gitignored)
+│       ├── next.config.mjs
+│       ├── open-next.config.ts     # one-line OpenNext re-export
 │       └── package.json
 ├── packages/
 │   ├── doks-core/                  # framework. Published to npm
 │   │   ├── src/
+│   │   │   ├── adapters/
+│   │   │   │   ├── sqlite/         # better-sqlite3 + sqlite-vec
+│   │   │   │   └── d1/             # D1 (in-Worker) + d1/http (REST API)
+│   │   │   ├── cloudflare/         # OpenNext one-liner config
 │   │   │   ├── components/         # React components
-│   │   │   ├── lib/                # docs / chunks / db / embed / theme
+│   │   │   ├── lib/                # docs / chunks / embed
 │   │   │   ├── pages/docPage.tsx   # the [[...slug]] renderer
-│   │   │   ├── api/searchRoute.ts  # POST/GET /api/docs/search
+│   │   │   ├── api/searchRoute.ts  # createSearchHandler factory
 │   │   │   ├── scripts/ingest.ts
-│   │   │   └── styles/             # globals.css, themes.css
-│   │   ├── bin/doks.js             # `doks upgrade` CLI
+│   │   │   ├── styles/             # globals.css, themes.css
+│   │   │   └── types/VectorStore.ts
+│   │   ├── bin/doks.js             # upgrade / d1:init / setup-cloudflare CLI
 │   │   ├── migrations/             # X.Y.Z.js scripts
 │   │   └── package.json
 │   └── create-doks/                # `npx create-doks` CLI
@@ -145,9 +154,12 @@ on `:root[data-theme="…"]`. Built-ins: `light`, `dark`, `blue-pearl`, `sand`.
 Two CLIs are published on npm:
 
 ```bash
-npx create-doks my-docs       # scaffold a new project
-npx doks upgrade              # bump doks-core + run pending migrations
-                              # (run inside a doks project)
+npx create-doks my-docs              # scaffold a new project
+
+# Inside a doks project:
+npx doks upgrade                     # bump doks-core + run pending migrations
+npx doks d1:init [--remote|--local]  # provision the D1 chunks-table schema
+npx doks setup-cloudflare            # one-shot D1 + R2 + schema + wrangler.jsonc
 ```
 
 If you're hacking on the framework itself, work from the workspace
@@ -163,8 +175,8 @@ If you're hacking on the framework itself, work from the workspace
 npm run build
 ```
 
-The output is at `apps/site/.next`. The `/api/docs/search` route requires a
-Node.js runtime (native `better-sqlite3` bindings). On Vercel:
+The default SQLite adapter requires a Node.js runtime (native
+`better-sqlite3` bindings). On Vercel:
 
 ```bash
 cd apps/site && npx vercel --prod
@@ -173,6 +185,17 @@ cd apps/site && npx vercel --prod
 Set env vars (`VOYAGE_API_KEY`, …) in the Vercel dashboard. `data/docs.db`
 must exist at build time. Run `npm run ingest` as a build step or commit the
 artifact.
+
+For Cloudflare Workers swap `lib/doks.config.ts` to the D1 adapter and
+provision in one command:
+
+```bash
+npx doks setup-cloudflare    # creates D1 + R2, runs schema, prints wrangler.jsonc
+```
+
+See [`apps/site/content/docs/guides/deployment.mdx`](./apps/site/content/docs/guides/deployment.mdx)
+for the complete D1 walkthrough (incl. R2 incremental cache, `createD1HttpStore`
+ingest, OpenNext dev hook).
 
 ---
 
