@@ -1,6 +1,6 @@
 {
   "name": "doks-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -38,7 +38,14 @@
     "url": "https://github.com/getdoks/doks/issues"
   },
   "license": "MIT",
-  "files": ["dist", "src/styles", "bin", "migrations", "LICENSE", "README.md"],
+  "files": [
+    "dist",
+    "src/styles",
+    "bin",
+    "migrations",
+    "LICENSE",
+    "README.md"
+  ],
   "peerDependencies": {
     "next": ">=15",
     "react": ">=19",
@@ -62,10 +69,10 @@
     "@types/better-sqlite3": "^7.6.11"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/fix-extensions.mjs",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.js",
-    "prepack": "tsc"
+    "prepack": "tsc && node scripts/fix-extensions.mjs"
   }
 }
