@@ -15,6 +15,28 @@ vector_metadata:
 The fastest way to start a new doks site is the `create-doks` CLI. It clones the
 template, asks a few questions, and runs `npm install` for you.
 
+### <Chunk id="install-prereqs" importance={0.85} tags={["install", "prereqs", "node"]}>Prerequisites</Chunk>
+
+| Tool | Version | Notes |
+| --- | --- | --- |
+| **Node.js** | `>= 20` | Next 15 requires `^18.18 || ^19.8 || >=20`. doks targets 20. |
+| **npm** | bundled with Node | Any recent version with workspace support. |
+| **C toolchain** | platform-specific | Needed once for `better-sqlite3` to compile native bindings. macOS: `xcode-select --install`. Debian/Ubuntu: `sudo apt-get install -y build-essential`. Windows: use WSL. |
+
+If `node -v` returns less than `v20.0.0`, install or switch first:
+
+```bash
+# With nvm (recommended)
+nvm install 20 && nvm use 20
+
+# With Homebrew
+brew install node@22 && brew link --force --overwrite node@22
+```
+
+Switching Node versions in an existing project means rebuilding native
+bindings. After upgrading Node, run `rm -rf node_modules package-lock.json
+&& npm install` once to pull a fresh `better-sqlite3` for the new ABI.
+
 ### <Chunk id="install-cli" importance={0.9} tags={["install"]}>Run the scaffold</Chunk>
 
 ```bash

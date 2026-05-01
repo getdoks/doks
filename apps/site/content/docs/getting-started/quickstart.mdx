@@ -16,15 +16,21 @@ doks is a local-first documentation site: write MDX, run the ingest script,
 and your prose is queryable as a vector index without leaving your machine.
 This page walks the path from "nothing on disk" to "running locally."
 
+You'll need **Node.js ≥ 20** and a working npm. If `node -v` returns less
+than `v20.0.0`, run `nvm install 20 && nvm use 20` (or
+`brew install node@22`) before going further. See
+[Install](/docs/getting-started/install) for the full prerequisite list.
+
 ### <Chunk id="qs-scaffold" importance={0.95} tags={["scaffold", "create-doks", "cli"]}>Scaffold a project</Chunk>
 
 ```bash
 npx create-doks my-docs
 ```
 
-You'll be prompted for site name, GitHub URL, and theme. The CLI writes those
-values into `lib/site.config.ts` and runs `npm install`. See
-[Install](/docs/getting-started/install) for the full flag reference.
+You'll be prompted for site name, GitHub URL, theme, and whether to keep the
+demo MDX content. The CLI writes those values into `lib/site.config.ts` and
+runs `npm install`. See [Install](/docs/getting-started/install) for the full
+flag reference.
 
 The native dependency `better-sqlite3` is built during install. If it fails,
 install your platform's C toolchain (`xcode-select --install` on macOS,
