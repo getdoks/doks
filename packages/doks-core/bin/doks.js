@@ -14,6 +14,44 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = resolve(__dirname, '..', 'migrations');
 
+// Detect the active package manager from the user-agent npm sets when it
+// runs scripts. bun, pnpm, and yarn set the same convention. Falls back
+// to npm if the project was invoked outside of a script.
+function detectPackageManager() {
+  const ua = process.env.npm_config_user_agent || '';
+  if (ua.startsWith('bun')) return 'bun';
+  if (ua.startsWith('pnpm')) return 'pnpm';
+  if (ua.startsWith('yarn')) return 'yarn';
+  return 'npm';
+}
+
+function pmRun(script) {
+  const pm = detectPackageManager();
+  // bun, pnpm, yarn, npm all support `<pm> run <script>`.
+  return `${pm} run ${script}`;
+}
+
+function pmInstallDev(packages) {
+  const pm = detectPackageManager();
+  const list = Array.isArray(packages) ? packages.join(' ') : packages;
+  switch (pm) {
+    case 'bun': return `bun add -D ${list}`;
+    case 'pnpm': return `pnpm add -D ${list}`;
+    case 'yarn': return `yarn add -D ${list}`;
+    default: return `npm install -D ${list}`;
+  }
+}
+
+function pmInstall(spec) {
+  const pm = detectPackageManager();
+  switch (pm) {
+    case 'bun': return `bun add ${spec}`;
+    case 'pnpm': return `pnpm add ${spec}`;
+    case 'yarn': return `yarn add ${spec}`;
+    default: return `npm install ${spec}`;
+  }
+}
+
 function help() {
   console.log(`
 doks. Framework CLI
@@ -263,8 +301,8 @@ function setupCloudflare(args) {
   console.log('  3. Add `export { default } from "doks-core/cloudflare/open-next";`');
   console.log('     to open-next.config.ts.');
   console.log('  4. Ingest:');
-  console.log('       DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest');
-  console.log('  5. Deploy: npm run deploy');
+  console.log(`       DOKS_CONFIG=lib/doks.config.ingest.ts ${pmRun('ingest')}`);
+  console.log(`  5. Deploy: ${pmRun('deploy')}`);
   console.log('');
   console.log('Or run `doks deploy:cloudflare` to do all of the above in one go.');
   return result;
@@ -333,8 +371,9 @@ async function upgrade({ dryRun }) {
     return;
   }
 
-  console.log('Installing…');
-  execSync(`npm install doks-core@${latest}`, { cwd, stdio: 'inherit' });
+  const installCmd = pmInstall(`doks-core@${latest}`);
+  console.log(`Installing… (\`${installCmd}\`)`);
+  execSync(installCmd, { cwd, stdio: 'inherit' });
 
   for (const file of listMigrations()) {
     const ver = file.replace('.js', '');
@@ -385,9 +424,10 @@ function ensureIndex() {
     return;
   }
 
-  console.log(`▸ ensure-index: ${dbPath} missing, running ingest…`);
+  const cmd = pmRun('ingest');
+  console.log(`▸ ensure-index: ${dbPath} missing, running \`${cmd}\`…`);
   try {
-    execSync('npm run ingest', { cwd, stdio: 'inherit' });
+    execSync(cmd, { cwd, stdio: 'inherit' });
   } catch (e) {
     fail(`ingest failed: ${e.message}`);
   }
@@ -449,12 +489,13 @@ function ensurePeerDeps(cwd, pkg, dryRun) {
     console.log('▸ peer deps: already installed');
     return;
   }
-  console.log(`▸ installing peer deps: ${missing.join(', ')}`);
+  const cmd = pmInstallDev(missing);
+  console.log(`▸ installing peer deps: ${cmd}`);
   if (dryRun) {
     console.log('  (dry-run, skipping)');
     return;
   }
-  execSync(`npm install -D ${missing.join(' ')}`, { cwd, stdio: 'inherit' });
+  execSync(cmd, { cwd, stdio: 'inherit' });
 }
 
 function checkWranglerLogin() {
@@ -656,8 +697,8 @@ async function deployCloudflare(args) {
     return;
   }
   console.log('▸ done. Next:');
-  console.log('    DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest');
-  console.log('    npm run deploy');
+  console.log(`    DOKS_CONFIG=lib/doks.config.ingest.ts ${pmRun('ingest')}`);
+  console.log(`    ${pmRun('deploy')}`);
 }
 
 const cmd = process.argv[2];
