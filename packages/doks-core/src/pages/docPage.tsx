@@ -12,6 +12,8 @@ import {
   getDocSource,
   extractToc,
 } from "../lib/docs";
+import { getBundledMap } from "../runtime/content";
+import { rehypeJsxHeadingSlugs } from "../lib/rehypeJsxHeadingSlugs";
 import { SiteName, GithubUrl } from "../components/mdx/Brand";
 import DocPageRail from "../components/DocPageRail";
 import PrevNext from "../components/PrevNext";
@@ -26,7 +28,6 @@ import CodeBlock from "../components/mdx/CodeBlock";
 import { Steps, Step } from "../components/mdx/Steps";
 import Figure from "../components/mdx/Figure";
 import SemanticSearch from "../components/SemanticSearch";
-import GithubSlugger from "github-slugger";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 
 function MdxPre({ children }: { children: ReactNode }) {
@@ -57,67 +58,6 @@ function MdxTable({ children }: { children: ReactNode }) {
       <table>{children}</table>
     </div>
   );
-}
-
-// rehype-slug only adds ids to standard HAST `element` nodes. Author-written
-// JSX headings like `<h2 className="sec-h2">…</h2>` come through as
-// `mdxJsxFlowElement` nodes and are skipped, leaving them with no anchor
-// target. TOC links pointed to nothing. This walks the tree and assigns
-// slug ids to every h1–h6 the standard plugin missed.
-//
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyNode = any;
-function rehypeJsxHeadingSlugs() {
-  return (tree: AnyNode) => {
-    const slugger = new GithubSlugger();
-
-    const textOf = (node: AnyNode): string => {
-      if (!node) return "";
-      if (node.type === "text") return String(node.value ?? "");
-      if (Array.isArray(node.children)) {
-        return node.children.map(textOf).join("");
-      }
-      return "";
-    };
-
-    const walk = (node: AnyNode) => {
-      const isStdHeading =
-        node.type === "element" && /^h[1-6]$/.test(node.tagName);
-      const isJsxHeading =
-        (node.type === "mdxJsxFlowElement" ||
-          node.type === "mdxJsxTextElement") &&
-        /^h[1-6]$/.test(node.name);
-
-      if (isStdHeading) {
-        const props = (node.properties ??= {});
-        if (!props.id) {
-          const text = textOf(node).trim();
-          if (text) props.id = slugger.slug(text);
-        }
-      } else if (isJsxHeading) {
-        const attrs: AnyNode[] = (node.attributes ??= []);
-        const hasId = attrs.some(
-          (a) => a.type === "mdxJsxAttribute" && a.name === "id",
-        );
-        if (!hasId) {
-          const text = textOf(node).trim();
-          if (text) {
-            attrs.push({
-              type: "mdxJsxAttribute",
-              name: "id",
-              value: slugger.slug(text),
-            });
-          }
-        }
-      }
-
-      if (Array.isArray(node.children)) {
-        for (const child of node.children) walk(child);
-      }
-    };
-
-    walk(tree);
-  };
 }
 
 const mdxComponents = {
@@ -173,17 +113,33 @@ export default async function docPage({
   params: Promise<{ slug?: string[] }>;
 }) {
   const { slug } = await params;
-  const doc = getDocBySlug(slug ?? []);
+  const slugArr = slug ?? [];
+  const doc = getDocBySlug(slugArr);
   if (!doc) notFound();
 
-  const raw = getDocSource(slug ?? []);
+  // Prefer the precompiled Component (schema 2+, edge-runtime safe).
+  // Fall back to runtime MDX compilation only when the bundled map is
+  // missing the Component (schema 1 gen files, or fs-only legacy
+  // consumers). The fallback uses next-mdx-remote/rsc, which calls
+  // `new Function()` at request time and DOES NOT WORK on Cloudflare
+  // Workers / V8 isolates. Run `doks build:content` to regenerate.
+  const bundled = getBundledMap();
+  const target = slugArr.join("/");
+  const bundledDoc = bundled?.docs.find((d) => d.slug.join("/") === target);
+  const PrecompiledComponent = bundledDoc?.Component as
+    | ((props: { components?: Record<string, unknown> }) => ReactNode)
+    | undefined;
+
+  const raw = bundledDoc?.raw ?? getDocSource(slugArr);
   if (!raw) notFound();
   const { content } = matter(raw);
   const toc = extractToc(raw);
   const fm = doc.frontmatter;
-  const { prev, next } = getDocNeighbors(slug ?? []);
+  const { prev, next } = getDocNeighbors(slugArr);
 
-  const rendered = (
+  const rendered = PrecompiledComponent ? (
+    <PrecompiledComponent components={mdxComponents} />
+  ) : (
     <MDXRemote
       source={content}
       components={mdxComponents}

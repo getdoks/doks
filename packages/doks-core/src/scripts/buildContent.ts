@@ -1,21 +1,34 @@
 // Build-time content generator. Walks the consumer's `content/docs/` tree,
-// captures each MDX file's frontmatter + raw source + slug + href, reads
-// `_meta.json`, and emits a TypeScript module that registers the snapshot
-// with the runtime cache.
+// compiles each MDX file to an ESM module via @mdx-js/mdx, writes one
+// `.mjs` per doc into `<consumer>/.doks/compiled/`, then emits
+// `lib/doks-content.gen.ts` with static imports of every compiled module
+// plus their frontmatter.
 //
-// Output: `<consumer>/lib/doks-content.gen.ts`. The consumer's
-// `app/layout.tsx` adds a side-effect `import "@/lib/doks-content.gen";`
-// so the registration happens before any page renders. After registration,
-// `getDocBySlug`, `getAllDocs`, `getDocSource`, and `buildDocTree` all
-// resolve from memory — no fs at request time, which lets edge runtimes
-// (Cloudflare Workers, Vercel Edge, etc.) serve doc pages.
+// Why precompile? Cloudflare Workers (and any V8-isolate runtime) block
+// `eval` and `new Function`. The 0.3.0–0.3.2 generator shipped raw MDX
+// source and let `next-mdx-remote/rsc` compile at request time — works
+// on Node, throws `EvalError: Code generation from strings disallowed`
+// on Workers. Precompiling at build time and statically importing the
+// result lets the worker serve doc pages without any runtime parsing.
+//
+// Output:
+//   <consumer>/lib/doks-content.gen.ts        # registers map (this file is gitignored)
+//   <consumer>/.doks/compiled/index.mjs        # compiled root
+//   <consumer>/.doks/compiled/<slug>.mjs       # compiled doc per slug
+//
+// The `.doks/compiled/` directory is also gitignored.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import matter from 'gray-matter';
+import { compile } from '@mdx-js/mdx';
+import remarkGfm from 'remark-gfm';
+import rehypeSlug from 'rehype-slug';
+import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 
 import { CONTENT_SCHEMA_VERSION } from '../runtime/content';
 import type { DocFrontmatter } from '../lib/docs';
+import { rehypeJsxHeadingSlugs } from '../lib/rehypeJsxHeadingSlugs';
 
 export interface BuildContentOptions {
   /** Project root. Defaults to `process.cwd()`. */
@@ -24,6 +37,11 @@ export interface BuildContentOptions {
   docsDir?: string;
   /** Path (relative to `root`) to write the generated module. Defaults to `lib/doks-content.gen.ts`. */
   outFile?: string;
+  /**
+   * Path (relative to `root`) where compiled per-doc modules go.
+   * Defaults to `.doks/compiled`. Should be gitignored.
+   */
+  compiledDir?: string;
   /** Suppress stdout. Default `false`. */
   silent?: boolean;
 }
@@ -33,7 +51,10 @@ interface CapturedDoc {
   href: string;
   frontmatter: DocFrontmatter;
   raw: string;
+  body: string;          // MDX body (frontmatter stripped) — what we compile
   filePath: string;
+  /** Filesystem-safe filename for the compiled .mjs (no extension). */
+  safeName: string;
 }
 
 function walkMdx(dir: string, files: string[] = []): string[] {
@@ -54,34 +75,99 @@ function fileToSlug(filePath: string, docsDir: string): string[] {
   return parts;
 }
 
-export function buildContent(options: BuildContentOptions = {}): { docs: number; outFile: string } {
+function slugToSafeName(slug: string[]): string {
+  if (slug.length === 0) return 'index';
+  return slug
+    .map((s) => s.replace(/[^a-zA-Z0-9_-]/g, '_'))
+    .join('--');
+}
+
+async function compileMdxBody(body: string): Promise<string> {
+  // outputFormat: 'program' produces a real ES module: `export default …`
+  // jsxRuntime: 'automatic' uses react/jsx-runtime, no `import React from "react"` needed.
+  // Plugins run at compile time so the resulting JS contains no MDX/markdown — pure JSX → JS.
+  const compiled = await compile(body, {
+    outputFormat: 'program',
+    jsxRuntime: 'automatic',
+    jsxImportSource: 'react',
+    development: false,
+    remarkPlugins: [remarkGfm],
+    rehypePlugins: [
+      rehypeSlug,
+      rehypeJsxHeadingSlugs,
+      [rehypeAutolinkHeadings, { behavior: 'wrap' }],
+    ],
+  });
+  return String(compiled);
+}
+
+export async function buildContent(
+  options: BuildContentOptions = {},
+): Promise<{ docs: number; outFile: string }> {
   const root = options.root ?? process.cwd();
   const docsDir = path.resolve(root, options.docsDir ?? 'content/docs');
   const outFile = path.resolve(root, options.outFile ?? 'lib/doks-content.gen.ts');
+  const compiledDir = path.resolve(root, options.compiledDir ?? '.doks/compiled');
   const log = options.silent ? () => {} : (m: string) => console.log(m);
 
   log('▸ doks build:content');
-  log(`  docs:   ${path.relative(root, docsDir) || '.'}`);
-  log(`  output: ${path.relative(root, outFile) || '.'}`);
+  log(`  docs:     ${path.relative(root, docsDir) || '.'}`);
+  log(`  output:   ${path.relative(root, outFile) || '.'}`);
+  log(`  compiled: ${path.relative(root, compiledDir) || '.'}`);
 
   if (!fs.existsSync(docsDir)) {
     log(`  ⚠ docs directory not found, writing empty content map`);
   }
 
   const files = walkMdx(docsDir);
-  const captured: CapturedDoc[] = files.map((filePath) => {
+
+  // First pass: parse frontmatter + slug, plan filenames, dedupe collisions.
+  const captured: CapturedDoc[] = [];
+  const usedNames = new Set<string>();
+  for (const filePath of files) {
     const raw = fs.readFileSync(filePath, 'utf8');
-    const { data } = matter(raw);
+    const { data, content: body } = matter(raw);
     const slug = fileToSlug(filePath, docsDir);
-    return {
+    let safeName = slugToSafeName(slug);
+    if (usedNames.has(safeName)) {
+      // Disambiguate with a counter. Rare — would only happen if two
+      // distinct slugs collapse to the same sanitized name.
+      let n = 2;
+      while (usedNames.has(`${safeName}-${n}`)) n++;
+      safeName = `${safeName}-${n}`;
+    }
+    usedNames.add(safeName);
+    captured.push({
       slug,
       href: '/docs' + (slug.length ? '/' + slug.join('/') : ''),
       frontmatter: data as DocFrontmatter,
       raw,
+      body,
       filePath,
-    };
-  });
+      safeName,
+    });
+  }
 
+  // Second pass: compile each MDX to ESM and write to disk.
+  fs.rmSync(compiledDir, { recursive: true, force: true });
+  fs.mkdirSync(compiledDir, { recursive: true });
+
+  for (const c of captured) {
+    let compiled: string;
+    try {
+      compiled = await compileMdxBody(c.body);
+    } catch (err) {
+      log(
+        `  ✗ compile failed: ${path.relative(root, c.filePath)}\n` +
+          `    ${(err as Error).message}`,
+      );
+      throw err;
+    }
+    const outPath = path.join(compiledDir, `${c.safeName}.mjs`);
+    fs.writeFileSync(outPath, compiled);
+  }
+
+  // Read root meta.
   const metaPath = path.join(docsDir, '_meta.json');
   let rootMeta: Record<string, unknown> = {};
   if (fs.existsSync(metaPath)) {
@@ -92,34 +178,59 @@ export function buildContent(options: BuildContentOptions = {}): { docs: number;
     }
   }
 
-  const payload = {
-    schemaVersion: CONTENT_SCHEMA_VERSION,
-    docs: captured.map((c) => ({
-      slug: c.slug,
-      href: c.href,
-      frontmatter: c.frontmatter,
-      raw: c.raw,
-      filePath: c.filePath,
-    })),
-    rootMeta,
-  };
+  // Emit the gen file. Static imports of every compiled .mjs (so a
+  // bundler can resolve them) plus a setContentMap call wiring slugs +
+  // frontmatter + Component refs.
+  const importLines: string[] = [];
+  const docEntries: string[] = [];
 
-  // Use JSON.stringify (not template literal interpolation) so backticks,
-  // backslashes, and Unicode in MDX bodies survive intact.
+  // Compute the import path from the gen file's directory to the
+  // compiled dir, so the bundler can resolve regardless of how the
+  // consumer arranges things.
+  const genDir = path.dirname(outFile);
+  const compiledRel = path
+    .relative(genDir, compiledDir)
+    .split(path.sep)
+    .join('/'); // posix separators for the import specifier
+
+  captured.forEach((c, i) => {
+    const importSpec = `${compiledRel}/${c.safeName}.mjs`;
+    // Use `./` prefix when the relative path doesn't already start with one.
+    const finalSpec = importSpec.startsWith('.') ? importSpec : `./${importSpec}`;
+    importLines.push(`import * as Doc${i} from "${finalSpec}";`);
+    docEntries.push(
+      `  { slug: ${JSON.stringify(c.slug)}, ` +
+        `href: ${JSON.stringify(c.href)}, ` +
+        `frontmatter: ${JSON.stringify(c.frontmatter)}, ` +
+        `raw: ${JSON.stringify(c.raw)}, ` +
+        `Component: Doc${i}.default, ` +
+        `filePath: ${JSON.stringify(c.filePath)} },`,
+    );
+  });
+
   const body =
     `// AUTO-GENERATED by \`doks build:content\`. Do not edit.\n` +
     `// Re-runs on \`predev\` and \`prebuild\`; see your package.json.\n` +
     `\n` +
     `import { setContentMap } from "doks-core/runtime/content";\n` +
+    importLines.join('\n') +
+    (importLines.length ? '\n' : '') +
     `\n` +
-    `setContentMap(${JSON.stringify(payload)});\n` +
+    `setContentMap({\n` +
+    `  schemaVersion: ${CONTENT_SCHEMA_VERSION},\n` +
+    `  docs: [\n` +
+    docEntries.join('\n') +
+    (docEntries.length ? '\n' : '') +
+    `  ],\n` +
+    `  rootMeta: ${JSON.stringify(rootMeta)},\n` +
+    `});\n` +
     `\n` +
     `export {};\n`;
 
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
   fs.writeFileSync(outFile, body);
 
-  log(`  ✓ captured ${captured.length} doc(s)`);
+  log(`  ✓ compiled ${captured.length} doc(s)`);
   return { docs: captured.length, outFile };
 }
 
@@ -130,10 +241,8 @@ const isMain =
   /scripts[\\/]buildContent\.[mc]?[jt]s$/.test(process.argv[1]);
 
 if (isMain) {
-  try {
-    buildContent();
-  } catch (err) {
+  buildContent().catch((err) => {
     console.error('build:content failed:', err);
     process.exit(1);
-  }
+  });
 }
