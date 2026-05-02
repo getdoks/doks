@@ -195,6 +195,24 @@ export function getDocBySlug(slug: string[]): DocMeta | null {
   return docs.find((d) => d.slug.join('/') === target) ?? null;
 }
 
+let _warnedEmptyContent = false;
+function warnEmptyContentOnce(): void {
+  if (_warnedEmptyContent) return;
+  _warnedEmptyContent = true;
+  console.warn(
+    '[doks] Bundled content map is empty AND filesystem read failed. ' +
+      'Doc pages will 404. On edge runtimes (Cloudflare Workers, Vercel ' +
+      'Edge) you must register the snapshot at request time. Add this to ' +
+      'your root layout:\n' +
+      '\n' +
+      '  // app/layout.tsx\n' +
+      '  import "@/lib/doks-content.gen";\n' +
+      '\n' +
+      'Or run `npx doks upgrade` to wire it automatically. See ' +
+      'https://github.com/getdoks/doks/blob/main/TROUBLESHOOTING.md',
+  );
+}
+
 /**
  * Return the raw MDX source for a doc. Edge-runtime safe when the
  * bundled-content map has been registered (via `lib/doks-content.gen.ts`).
@@ -209,10 +227,16 @@ export function getDocSource(slug: string[]): string | null {
     return found?.raw ?? null;
   }
   const doc = getDocBySlug(slug);
-  if (!doc || !doc.filePath) return null;
+  if (!doc || !doc.filePath) {
+    warnEmptyContentOnce();
+    return null;
+  }
   try {
     return fs.readFileSync(doc.filePath, 'utf8');
   } catch {
+    // Bundled map empty AND fs read threw — almost certainly an edge
+    // runtime where the consumer forgot the layout side-effect import.
+    warnEmptyContentOnce();
     return null;
   }
 }
