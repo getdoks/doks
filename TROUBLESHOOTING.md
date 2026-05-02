@@ -127,6 +127,61 @@ npm config set registry https://registry.npmjs.org/
 
 ---
 
+## `'getVectorStore' is not exported from '@/lib/doks.config'`
+
+**Symptom**
+
+```
+./app/api/docs/search/route.ts
+Type error: '"@/lib/doks.config"' has no exported member named 'getVectorStore'.
+Did you mean 'vectorStore'?
+  1 | import { createSearchHandler } from "doks-core";
+> 2 | import { getVectorStore } from "@/lib/doks.config";
+    |          ^
+```
+
+**Cause**
+
+`app/api/docs/search/route.ts` imports `getVectorStore`, but
+`lib/doks.config.ts` exports `vectorStore`. Mismatched names — usually
+because the route was hand-edited (or copied from an old guide) while
+the config still uses the canonical shape.
+
+doks-core never asks for `getVectorStore`. The factory takes the
+`vectorStore` export directly — and accepts both eager stores (SQLite
+default) *and* thunks (`() => VectorStore` for D1, where the binding is
+per-request).
+
+**Fix**
+
+Restore the canonical route:
+
+```ts
+// app/api/docs/search/route.ts
+import { createSearchHandler } from "doks-core";
+import { vectorStore } from "@/lib/doks.config";
+
+export const runtime = "nodejs";       // drop this for D1 / edge
+export const dynamic = "force-dynamic";
+
+export const { POST, GET } = createSearchHandler(vectorStore);
+```
+
+For D1 deployments, drop `export const runtime = "nodejs"` and make sure
+`lib/doks.config.ts` exports a thunk (run `npx doks deploy:cloudflare`
+to wire it).
+
+**Caveat for SQLite on Cloudflare**
+
+If the project deploys to Cloudflare Workers but `lib/doks.config.ts`
+uses `createSqliteStore`, `next build` succeeds and doc pages render
+(via the bundled-content runtime), but **`/api/docs/search` crashes at
+request time** because `better-sqlite3` is a native Node binding that
+V8 isolates can't load. Either:
+
+1. Accept the limitation if you don't need search on the worker.
+2. Switch to D1 with `npx doks deploy:cloudflare`.
+
 ## `lib/doks.config.ts` exists but does not export `vectorStore`
 
 **Symptom**
@@ -426,6 +481,74 @@ npx doks deploy:cloudflare              # writes wrangler.jsonc for you
 Then commit it. OpenNext won't regenerate as long as the file exists.
 
 ---
+
+## Doc pages render locally but 404 on Cloudflare (or any edge runtime)
+
+**Symptom**
+
+`next dev` and `next build` on your laptop both render the docs fine.
+The exact same code deployed to Cloudflare Workers serves a 404 for
+every doc page. Worker logs may show empty results, no errors thrown.
+
+**Cause**
+
+`lib/doks-content.gen.ts` exists and is populated, but **nothing
+imports it at runtime**, so `setContentMap()` is never called and the
+bundled-content cache stays empty. On Node hosts that's invisible
+because the data layer falls back to `fs.readFileSync(content/docs/...)`,
+which works locally. On Cloudflare Workers there is no filesystem, so
+the fallback returns `null` and `DocPage` calls `notFound()`.
+
+This usually happens when someone bumps `doks-core` to 0.3+ via
+`npm install doks-core@latest` (or the bun / pnpm equivalent) instead
+of `npx doks upgrade`. The plain install bumps the version but doesn't
+run migration `0.3.0.js`, which is what wires the layout import and
+the `withDoks` wrapper.
+
+**Fix — option A (idempotent, recommended)**
+
+```bash
+npx doks upgrade
+```
+
+The migration adds:
+
+1. `import "@/lib/doks-content.gen";` to `app/layout.tsx` (the
+   side-effect import that calls `setContentMap` at request time).
+2. `withDoks(nextConfig)` wrapper in `next.config.mjs` (regenerates
+   the gen file on every build).
+3. `predev` / `prebuild` script entries.
+
+It's idempotent — already-applied steps are skipped.
+
+**Fix — option B (manual, if you want to do exactly two edits)**
+
+Add the runtime registration to your root layout:
+
+```tsx
+// app/layout.tsx
+import "./globals.css";
+import "@/lib/doks-content.gen";          // ← add this line
+// …rest unchanged
+```
+
+And the build-time generator hook to your Next config:
+
+```js
+// next.config.mjs
+import { withDoks } from "doks-core/next";
+
+const nextConfig = { /* … */ };
+export default withDoks(nextConfig);      // ← wrap the export
+```
+
+**You need BOTH.** They're not interchangeable:
+
+- The layout import is what registers content with the runtime cache.
+  Without it, the cache stays empty and edge runtimes 404.
+- `withDoks` is what regenerates the gen file as you edit MDX.
+  Without it, the gen file goes stale (or is missing entirely on a
+  fresh CI checkout where `lib/doks-content.gen.ts` is gitignored).
 
 ## Pages render but search returns empty `{ results: [] }`
 
