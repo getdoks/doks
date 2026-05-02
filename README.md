@@ -204,6 +204,13 @@ for the complete walkthrough (and the manual path).
 
 ---
 
+## Troubleshooting
+
+Common errors during dev, build, and publish (native module mismatches,
+npm 404 / auth issues, config shape errors, Cloudflare deploy gotchas)
+live in [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md). Grep it by the
+error message you saw.
+
 ## Contributing
 
 - Type errors must stay clean: `npm run typecheck`.
