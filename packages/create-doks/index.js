@@ -17,8 +17,10 @@ import kleur from 'kleur';
 // Pinned to a tag so a `npx create-doks@0.2.x` always emits the
 // 0.2.x-shaped template even if `apps/site` on main moves ahead.
 // Bump in lock-step with doks-core releases that change the template.
-const DEFAULT_TEMPLATE = 'getdoks/doks#v0.2.3/apps/site';
+const DEFAULT_TEMPLATE = 'getdoks/doks#v0.3.0/apps/site';
 const THEMES = ['light', 'dark', 'blue-pearl', 'sand'];
+
+const DEPLOY_TARGETS = ['vercel', 'cloudflare'];
 
 function parseArgs(argv) {
   const args = { flags: {}, positional: [] };
@@ -31,12 +33,19 @@ function parseArgs(argv) {
     else if (a === '--template') args.flags.template = argv[++i];
     else if (a === '--samples') args.flags.samples = true;
     else if (a === '--no-samples') args.flags.samples = false;
+    else if (a === '--target') args.flags.target = argv[++i];
     else if (a.startsWith('--')) {
       console.error(kleur.red(`Unknown flag: ${a}`));
       process.exit(2);
     } else {
       args.positional.push(a);
     }
+  }
+  if (args.flags.target && !DEPLOY_TARGETS.includes(args.flags.target)) {
+    console.error(
+      kleur.red(`--target must be one of: ${DEPLOY_TARGETS.join(', ')}`),
+    );
+    process.exit(2);
   }
   return args;
 }
@@ -56,6 +65,8 @@ ${kleur.bold('Options:')}
   --template-path <dir>  copy from a local directory instead of degit
   --samples              keep the demo MDX corpus (Hero, Callouts, archetypes, …)
   --no-samples           strip the demo content; start with a single index.mdx
+  --target <host>        deploy target: 'vercel' (Node + SQLite, default) or
+                         'cloudflare' (Workers + D1 + R2)
   --no-install           skip 'npm install' after scaffolding
   -y, --yes              accept defaults for all prompts
   -h, --help             show this help
@@ -105,6 +116,16 @@ async function main() {
         message: 'Keep the demo MDX content as a learning reference?',
         initial: false,
       },
+      {
+        type: flags.yes || flags.target ? null : 'select',
+        name: 'deployTarget',
+        message: 'Deploy target:',
+        choices: [
+          { title: 'Vercel / Node (SQLite)', value: 'vercel' },
+          { title: 'Cloudflare Workers (D1 + R2)', value: 'cloudflare' },
+        ],
+        initial: 0,
+      },
     ],
     { onCancel: () => process.exit(1) },
   );
@@ -121,13 +142,14 @@ async function main() {
       : responses.samples !== undefined
         ? responses.samples
         : false;
+  const deployTarget = flags.target || responses.deployTarget || 'vercel';
 
-  const target = resolve(targetName);
-  if (existsSync(target) && readdirSync(target).length > 0) {
-    console.error(kleur.red(`✗ ${target} already exists and is not empty.`));
+  const targetDir = resolve(targetName);
+  if (existsSync(targetDir) && readdirSync(targetDir).length > 0) {
+    console.error(kleur.red(`✗ ${targetDir} already exists and is not empty.`));
     process.exit(1);
   }
-  mkdirSync(target, { recursive: true });
+  mkdirSync(targetDir, { recursive: true });
 
   if (flags.templatePath) {
     const src = resolve(flags.templatePath);
@@ -136,7 +158,7 @@ async function main() {
       process.exit(1);
     }
     console.log(kleur.dim(`▸ copying template from ${src}…`));
-    cpSync(src, target, {
+    cpSync(src, targetDir, {
       recursive: true,
       filter: (p) =>
         !/[/\\](node_modules|\.next|data|dist)([/\\]|$)/.test(p),
@@ -144,24 +166,29 @@ async function main() {
   } else {
     const spec = flags.template || DEFAULT_TEMPLATE;
     console.log(kleur.dim(`▸ cloning ${spec}…`));
-    await degit(spec, { cache: false, force: true }).clone(target);
+    await degit(spec, { cache: false, force: true }).clone(targetDir);
   }
 
   console.log(kleur.dim('▸ writing site.config.ts…'));
-  writeSiteConfig(target, { siteName, githubUrl, theme });
+  writeSiteConfig(targetDir, { siteName, githubUrl, theme });
 
   console.log(kleur.dim('▸ writing package.json…'));
-  rewritePackageJson(target, { targetName });
+  rewritePackageJson(targetDir, { targetName, deployTarget });
 
   if (!samples) {
     console.log(kleur.dim('▸ stripping demo content…'));
-    stripSampleContent(target, { siteName });
+    stripSampleContent(targetDir, { siteName });
+  }
+
+  if (deployTarget === 'cloudflare') {
+    console.log(kleur.dim('▸ wiring Cloudflare config (D1 + R2)…'));
+    wireCloudflare(targetDir);
   }
 
   if (!flags.noInstall) {
     console.log(kleur.dim('▸ installing dependencies…'));
     try {
-      execSync('npm install', { cwd: target, stdio: 'inherit' });
+      execSync('npm install', { cwd: targetDir, stdio: 'inherit' });
     } catch {
       console.error(
         kleur.yellow(
@@ -175,8 +202,13 @@ async function main() {
   console.log('Next steps:');
   console.log(`  cd ${targetName}`);
   if (flags.noInstall) console.log('  npm install');
-  console.log('  npm run ingest');
-  console.log('  npm run dev');
+  if (deployTarget === 'cloudflare') {
+    console.log('  npx wrangler login');
+    console.log('  npx doks deploy:cloudflare   # D1 + R2 + configs + token prompt');
+    console.log('  npm run dev');
+  } else {
+    console.log('  npm run dev                  # auto-runs ingest on first run');
+  }
 }
 
 function writeSiteConfig(target, { siteName, githubUrl, theme }) {
@@ -199,7 +231,7 @@ function writeSiteConfig(target, { siteName, githubUrl, theme }) {
   writeFileSync(path, next);
 }
 
-function rewritePackageJson(target, { targetName }) {
+function rewritePackageJson(target, { targetName, deployTarget }) {
   const path = join(target, 'package.json');
   if (!existsSync(path)) return;
   const pkg = JSON.parse(readFileSync(path, 'utf8'));
@@ -219,7 +251,90 @@ function rewritePackageJson(target, { targetName }) {
       pkg.scripts.ingest = `tsx ${pkg.scripts.ingest.replace(/^node\s+/, '')}`;
     }
   }
+
+  if (deployTarget === 'cloudflare') {
+    pkg.devDependencies = pkg.devDependencies || {};
+    pkg.devDependencies['@cloudflare/workers-types'] =
+      pkg.devDependencies['@cloudflare/workers-types'] || 'latest';
+    pkg.devDependencies['@opennextjs/cloudflare'] =
+      pkg.devDependencies['@opennextjs/cloudflare'] || 'latest';
+    pkg.devDependencies['wrangler'] =
+      pkg.devDependencies['wrangler'] || 'latest';
+    pkg.scripts = pkg.scripts || {};
+    pkg.scripts.deploy =
+      pkg.scripts.deploy ||
+      'opennextjs-cloudflare build && opennextjs-cloudflare deploy';
+    // The SQLite ensure-index step is meaningless on D1; the content
+    // generator (`doks build:content`) is still required so the doc
+    // pages can render without filesystem reads on the edge.
+    if (typeof pkg.scripts.predev === 'string') {
+      pkg.scripts.predev = pkg.scripts.predev
+        .replace(/\s*&&\s*doks\s+ensure-index/, '')
+        .replace(/doks\s+ensure-index\s*&&\s*/, '')
+        .trim();
+      if (!pkg.scripts.predev) delete pkg.scripts.predev;
+    }
+  }
+
   writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
+}
+
+const D1_RUNTIME_CONFIG_TEMPLATE = `// Vector-store configuration. Both the search route and the ingest CLI
+// read from here.
+//
+// Cloudflare runtime: D1 binding is per-request, so export a thunk.
+// For Node-side ingest, use lib/doks.config.ingest.ts.
+
+import { createD1Store } from "doks-core/adapters/d1";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import type { VectorStore } from "doks-core";
+
+export const vectorStore = (): VectorStore =>
+  createD1Store(getCloudflareContext().env.DB);
+`;
+
+const D1_INGEST_CONFIG_TEMPLATE = `// Node-side ingest config. Talks to the Cloudflare D1 REST API directly,
+// so it does not depend on \`getCloudflareContext()\` (Worker-only).
+//
+// Run with:
+//   DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest
+
+import { createD1HttpStore } from "doks-core/adapters/d1/http";
+import type { VectorStore } from "doks-core";
+
+export const vectorStore: VectorStore = createD1HttpStore({
+  accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,
+  databaseId: process.env.CLOUDFLARE_DATABASE_ID!,
+  apiToken: process.env.CLOUDFLARE_API_TOKEN!,
+});
+`;
+
+function wireCloudflare(target) {
+  // Swap lib/doks.config.ts to D1 thunk.
+  const runtimePath = join(target, 'lib', 'doks.config.ts');
+  if (existsSync(runtimePath)) {
+    writeFileSync(runtimePath, D1_RUNTIME_CONFIG_TEMPLATE);
+  }
+
+  // Add the Node-side ingest config.
+  const ingestPath = join(target, 'lib', 'doks.config.ingest.ts');
+  if (!existsSync(ingestPath)) {
+    writeFileSync(ingestPath, D1_INGEST_CONFIG_TEMPLATE);
+  }
+
+  // Uncomment the OpenNext dev hook in next.config.mjs.
+  const nextPath = join(target, 'next.config.mjs');
+  if (existsSync(nextPath)) {
+    const src = readFileSync(nextPath, 'utf8');
+    const next = src.replace(
+      /\/\/\s*import\s+\{\s*initOpenNextCloudflareForDev\s*\}\s+from\s+'@opennextjs\/cloudflare';\s*\n\/\/\s*initOpenNextCloudflareForDev\(\);/,
+      `import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';\ninitOpenNextCloudflareForDev();`,
+    );
+    if (next !== src) writeFileSync(nextPath, next);
+  }
+
+  // Drop the SQLite predev hook (D1 ingest is opt-in via DOKS_CONFIG).
+  // Already handled by rewritePackageJson when deployTarget=cloudflare.
 }
 
 function stripSampleContent(target, { siteName }) {

@@ -3,6 +3,8 @@ import path from 'node:path';
 import matter from 'gray-matter';
 import GithubSlugger from 'github-slugger';
 
+import { getBundledMap } from '../runtime/content';
+
 export const DOCS_DIR = path.join(process.cwd(), 'content', 'docs');
 
 export interface VectorMetadata {
@@ -81,6 +83,13 @@ type RootMeta = Record<string, CategoryMeta>;
 let _rootMetaCache: RootMeta | null = null;
 
 function readRootMeta(): RootMeta {
+  // Bundled-content runtime: prefer the snapshot baked at build time.
+  // Edge runtimes can't read `content/docs/_meta.json` at request time.
+  const bundled = getBundledMap();
+  if (bundled) {
+    return bundled.rootMeta as RootMeta;
+  }
+
   if (_rootMetaCache && process.env.NODE_ENV === 'production') {
     return _rootMetaCache;
   }
@@ -135,6 +144,28 @@ function fileToSlug(filePath: string): string[] {
 let _cache: DocMeta[] | null = null;
 
 export function getAllDocs(): DocMeta[] {
+  // Bundled-content runtime: list comes from the build-time snapshot.
+  const bundled = getBundledMap();
+  if (bundled) {
+    const docs = bundled.docs.map(
+      (b): DocMeta => ({
+        slug: b.slug,
+        href: b.href,
+        filePath: b.filePath ?? '',
+        frontmatter: b.frontmatter,
+      }),
+    );
+    docs.sort((a, b) => {
+      const oa = a.frontmatter.order ?? 999;
+      const ob = b.frontmatter.order ?? 999;
+      if (oa !== ob) return oa - ob;
+      return (a.frontmatter.title ?? '').localeCompare(
+        b.frontmatter.title ?? '',
+      );
+    });
+    return docs;
+  }
+
   if (_cache && process.env.NODE_ENV === 'production') return _cache;
   const files = walkMdx(DOCS_DIR);
   const docs = files.map((filePath): DocMeta => {
@@ -162,6 +193,28 @@ export function getDocBySlug(slug: string[]): DocMeta | null {
   const docs = getAllDocs();
   const target = slug.join('/');
   return docs.find((d) => d.slug.join('/') === target) ?? null;
+}
+
+/**
+ * Return the raw MDX source for a doc. Edge-runtime safe when the
+ * bundled-content map has been registered (via `lib/doks-content.gen.ts`).
+ * Falls back to `fs.readFileSync` if the bundled map is empty —
+ * filesystem path is fine on Node but throws on Cloudflare Workers.
+ */
+export function getDocSource(slug: string[]): string | null {
+  const bundled = getBundledMap();
+  if (bundled) {
+    const target = slug.join('/');
+    const found = bundled.docs.find((d) => d.slug.join('/') === target);
+    return found?.raw ?? null;
+  }
+  const doc = getDocBySlug(slug);
+  if (!doc || !doc.filePath) return null;
+  try {
+    return fs.readFileSync(doc.filePath, 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 // ── Tree for left sidebar ───────────────────────────────────

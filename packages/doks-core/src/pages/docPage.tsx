@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
@@ -10,6 +9,7 @@ import {
   getAllDocs,
   getDocBySlug,
   getDocNeighbors,
+  getDocSource,
   extractToc,
 } from "../lib/docs";
 import { SiteName, GithubUrl } from "../components/mdx/Brand";
@@ -139,6 +139,14 @@ const mdxComponents = {
   table: MdxTable,
 };
 
+/**
+ * Static params for the doc route. Consumers opt into SSG by re-exporting
+ * this from their `app/docs/[[...slug]]/page.tsx`. The default page
+ * itself is dynamic (renders from the bundled content map at request
+ * time on edge / Node), which avoids the OpenNext incremental cache
+ * dependency on Cloudflare. Re-export this function to flip back to
+ * fully static rendering on Node hosts.
+ */
 export async function generateStaticParams() {
   return getAllDocs().map((d) => ({
     slug: d.slug.length ? d.slug : undefined,
@@ -168,7 +176,8 @@ export default async function docPage({
   const doc = getDocBySlug(slug ?? []);
   if (!doc) notFound();
 
-  const raw = fs.readFileSync(doc.filePath, "utf8");
+  const raw = getDocSource(slug ?? []);
+  if (!raw) notFound();
   const { content } = matter(raw);
   const toc = extractToc(raw);
   const fm = doc.frontmatter;

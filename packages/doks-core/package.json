@@ -1,6 +1,6 @@
 {
   "name": "doks-core",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,7 +20,10 @@
     "./adapters/sqlite": "./dist/adapters/sqlite/index.js",
     "./adapters/d1": "./dist/adapters/d1/index.js",
     "./adapters/d1/http": "./dist/adapters/d1/http.js",
-    "./cloudflare/open-next": "./dist/cloudflare/openNext.js"
+    "./cloudflare/open-next": "./dist/cloudflare/openNext.js",
+    "./next": "./dist/next/index.js",
+    "./runtime/content": "./dist/runtime/content.js",
+    "./scripts/buildContent": "./dist/scripts/buildContent.js"
   },
   "description": "Framework engine for doks — Next.js + MDX docs with built-in RAG retrieval.",
   "keywords": [

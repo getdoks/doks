@@ -21,6 +21,7 @@ You'll be prompted for:
 - **GitHub repo URL** (header link, CTA target)
 - **Default theme** (`light` / `dark` / `blue-pearl` / `sand`)
 - **Keep the demo MDX content?** Yes for a learning reference; no (default) for a clean slate
+- **Deploy target?** `vercel` (Node + SQLite, default) or `cloudflare` (Workers + D1 + R2)
 
 The CLI then:
 
@@ -28,14 +29,26 @@ The CLI then:
 2. Rewrites `lib/site.config.ts` with your answers.
 3. Rewrites `package.json` (slugged name, `doks-core: "latest"`).
 4. Strips the demo MDX content if you opted out.
-5. Runs `npm install`.
+5. If you picked Cloudflare: swaps `lib/doks.config.ts` to the D1 thunk,
+   writes `lib/doks.config.ingest.ts`, uncomments the OpenNext dev hook,
+   and adds the Cloudflare peer deps (`@cloudflare/workers-types`,
+   `@opennextjs/cloudflare`, `wrangler`) to `devDependencies`.
+6. Runs `npm install`.
 
-After it finishes:
+After it finishes (Vercel/Node):
 
 ```bash
 cd my-docs
-npm run ingest   # build the embedding index
-npm run dev      # http://localhost:3000
+npm run dev          # auto-runs ingest on first run via predev hook
+```
+
+After it finishes (Cloudflare):
+
+```bash
+cd my-docs
+npx wrangler login
+npx doks deploy:cloudflare    # provisions D1 + R2, prompts for API token
+npm run dev
 ```
 
 ## Flags
@@ -44,9 +57,10 @@ npm run dev      # http://localhost:3000
 | --- | --- |
 | `--samples` | Keep the full demo MDX corpus (component galleries, archetypes, getting-started, reference, guides). |
 | `--no-samples` | Strip the demo content; start with a single `index.mdx`. (default) |
+| `--target <host>` | Deploy target: `vercel` (Node + SQLite, default) or `cloudflare` (Workers + D1 + R2). Skips the prompt. |
 | `--no-install` | Skip `npm install` after scaffolding. |
 | `-y`, `--yes` | Accept all defaults; useful for non-interactive scripts. |
-| `--template <spec>` | Use a different `degit` spec (default `getdoks/doks#v0.2.3/apps/site`, pinned to the tag matching this CLI version). |
+| `--template <spec>` | Use a different `degit` spec (default `getdoks/doks#v0.2.4/apps/site`, pinned to the tag matching this CLI version). |
 | `--template-path <dir>` | Copy from a local directory instead of cloning (used in CI / dev). |
 | `-h`, `--help` | Show usage. |
 
@@ -100,18 +114,20 @@ branding. Re-run `npm run ingest` whenever you change MDX. Standard cycle.
 ## Deploying
 
 The default SQLite adapter works on any Node host (Vercel, Netlify, Railway,
-Render, Docker). Cloudflare Workers needs the D1 + R2 path, which doks-core
-provides out of the box:
+Render, Docker). For Cloudflare Workers, scaffold with `--target cloudflare`
+(or pick it at the prompt) — the configs are pre-wired. Then:
 
 ```bash
-npm install -D @cloudflare/workers-types @opennextjs/cloudflare wrangler
 npx wrangler login
-npx doks setup-cloudflare        # creates D1 + R2, prints wrangler.jsonc
+npx doks deploy:cloudflare     # one shot: D1 + R2 + configs + token prompt
+DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest
+npm run deploy
 ```
 
-Then switch `lib/doks.config.ts` to `createD1Store` and follow the
+If you scaffolded as Vercel and want to migrate to Cloudflare later,
+`doks deploy:cloudflare` mutates the configs in place. See the
 [Deployment guide](https://github.com/getdoks/doks/blob/main/apps/site/content/docs/guides/deployment.mdx)
-for the remaining wiring.
+for the manual path and what the command actually does.
 
 ## Upgrading later
 

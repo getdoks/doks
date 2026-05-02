@@ -23,7 +23,7 @@ export { defaultSiteConfig } from './lib/defaultConfig';
 export { mdxComponents } from './mdx-components';
 
 // Data layer
-export { getAllDocs, getDocBySlug, buildDocTree, getDocNeighbors, extractToc }
+export { getAllDocs, getDocBySlug, buildDocTree, getDocNeighbors, extractToc, getDocSource }
   from './lib/docs';
 export type { DocMeta, DocNode, DocFrontmatter, TocItem, CategoryMeta } from './lib/docs';
 export { extractAllChunks } from './lib/chunks';
