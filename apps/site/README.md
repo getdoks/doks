@@ -12,9 +12,19 @@ Next.js + MDX docs framework with built-in RAG retrieval.
 
 ```bash
 npm install        # already done if you used `npx create-doks`
-npm run ingest     # build the vector index at data/docs.db
 npm run dev        # http://localhost:3000
 ```
+
+The `predev` script runs `doks build:content && doks ensure-index`, which:
+
+1. Snapshots `content/docs/` into `lib/doks-content.gen.ts` (gitignored)
+   so doc pages render at request time without filesystem reads. This is
+   what lets the same code deploy to Vercel/Node and Cloudflare Workers.
+2. Builds `data/docs.db` if it's missing (SQLite vector index for search;
+   skipped silently for D1 setups).
+
+After editing MDX, both run again on the next `npm run dev`. For an
+explicit re-ingest use `npm run ingest`.
 
 ## Authoring
 
@@ -85,21 +95,18 @@ Quick paths:
   `data/docs.db` must exist at build time, so add `npm run ingest` to your
   build command, or commit the artifact.
 
-- **Cloudflare Workers**:
+- **Cloudflare Workers** (one shot):
 
   ```bash
-  npm install -D @cloudflare/workers-types @opennextjs/cloudflare wrangler
   npx wrangler login
-  npx doks setup-cloudflare       # creates D1 + R2, runs schema,
-                                  # prints wrangler.jsonc to copy
+  npx doks deploy:cloudflare    # peers + D1 + R2 + configs + token prompt
+  DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest
+  npm run deploy
   ```
 
-  Then switch `lib/doks.config.ts` to `createD1Store(getCloudflareContext().env.DB)`,
-  uncomment the OpenNext dev hook in `next.config.mjs`, and deploy with
-  `npm run deploy`. The `open-next.config.ts` already re-exports the
-  doks-core OpenNext config (R2-backed incremental cache). See the
-  deployment guide for the full step-by-step including D1 ingest via
-  `createD1HttpStore`.
+  Add `--dry-run` to preview. If you scaffolded with `--target cloudflare`
+  the configs are already wired and only the cloud provisioning runs. See
+  the deployment guide for the manual path and what each step does.
 
 ## License
 

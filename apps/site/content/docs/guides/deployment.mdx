@@ -81,8 +81,43 @@ You'll need:
 | `@cloudflare/workers-types` | TypeScript types for `D1Database`, `getCloudflareContext`, etc. |
 
 `@cloudflare/workers-types` and `@opennextjs/cloudflare` are listed as
-**optional peer dependencies** of `doks-core`. Install them in your
-project when you wire D1:
+**optional peer dependencies** of `doks-core`.
+
+#### Quick path: `doks deploy:cloudflare`
+
+If you scaffolded with `npx create-doks` and picked Cloudflare at the
+prompt, the configs are already wired. From there:
+
+```bash
+npx wrangler login
+npx doks deploy:cloudflare
+DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest
+npm run deploy
+```
+
+`doks deploy:cloudflare` does eight things in one command:
+
+1. Installs the optional peer deps (`@cloudflare/workers-types`,
+   `@opennextjs/cloudflare`, `wrangler`).
+2. Verifies `wrangler whoami`.
+3. Provisions D1 + R2 with `wrangler d1 create` and `wrangler r2 bucket
+   create`.
+4. Runs the chunks-table schema against the new D1.
+5. Writes `wrangler.jsonc` with the bindings (`DB`,
+   `NEXT_INC_CACHE_R2_BUCKET`, `WORKER_SELF_REFERENCE`, `ASSETS`).
+6. Swaps `lib/doks.config.ts` to the D1 thunk and writes
+   `lib/doks.config.ingest.ts` for Node-side ingest.
+7. Uncomments `initOpenNextCloudflareForDev()` in `next.config.mjs`.
+8. Prompts for `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_DATABASE_ID`,
+   `CLOUDFLARE_API_TOKEN` and writes them to `.env.local`.
+
+Add `--dry-run` to see the plan without writing anything. The command is
+idempotent — re-running skips already-configured pieces.
+
+If you'd rather wire it by hand (or only want a subset), use the
+step-by-step path below.
+
+#### Manual path: step by step
 
 ```bash
 npm install -D @cloudflare/workers-types @opennextjs/cloudflare wrangler

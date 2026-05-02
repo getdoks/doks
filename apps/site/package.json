@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "doks build:content && doks ensure-index",
+    "prebuild": "doks build:content",
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
