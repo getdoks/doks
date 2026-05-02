@@ -254,7 +254,21 @@ function provisionCloudflare(args) {
     main: '.open-next/worker.js',
     compatibility_date: new Date().toISOString().slice(0, 10),
     compatibility_flags: ['nodejs_compat'],
-    observability: { enabled: true },
+    observability: {
+      enabled: false,
+      head_sampling_rate: 1,
+      logs: {
+        enabled: true,
+        head_sampling_rate: 1,
+        persist: true,
+        invocation_logs: true,
+      },
+      traces: {
+        enabled: false,
+        persist: true,
+        head_sampling_rate: 1,
+      },
+    },
     assets: {
       directory: '.open-next/assets',
       binding: 'ASSETS',
