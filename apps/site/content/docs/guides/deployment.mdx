@@ -399,6 +399,28 @@ Without `VOYAGE_API_KEY`, search results will be near-random because the
 hash-embedder produces deterministic-but-meaningless vectors. Set it
 before announcing the site.
 
+### <Chunk id="deploy-pm" importance={0.55} tags={["package-manager", "npm", "bun", "pnpm"]}>Package manager (npm, bun, pnpm, yarn)</Chunk>
+
+Every command in this guide works the same with npm, bun, pnpm, and yarn.
+Substitute as you prefer:
+
+| Doc says | bun | pnpm | yarn |
+| --- | --- | --- | --- |
+| `npm install` | `bun install` | `pnpm install` | `yarn` |
+| `npm run dev` | `bun run dev` | `pnpm dev` | `yarn dev` |
+| `npx create-doks` | `bunx create-doks` | `pnpm dlx create-doks` | `yarn dlx create-doks` |
+| `npx doks <cmd>` | `bunx doks <cmd>` (or `npx doks <cmd>`) | `pnpm exec doks <cmd>` | `yarn doks <cmd>` |
+
+The `doks` CLI auto-detects which package manager is invoking it and
+adjusts the commands it shells out to (e.g., `doks ensure-index` runs
+`bun run ingest` under bun, `npm run ingest` under npm).
+
+Don't commit two lockfiles. Pick one (`package-lock.json`, `bun.lock`,
+`pnpm-lock.yaml`, or `yarn.lock`) and let your CI install with the
+matching tool. Mixing causes "lockfile had changes, but lockfile is
+frozen" errors on platforms like Cloudflare and Vercel that auto-pick
+the lockfile.
+
 ### <Chunk id="deploy-troubleshooting" importance={0.65} tags={["deploy", "troubleshooting"]}>Common failures</Chunk>
 
 | Symptom | Cause | Fix |
@@ -410,6 +432,7 @@ before announcing the site.
 | Search returns empty `{results: []}` in production | `data/docs.db` not present at runtime | Add `npm run ingest` to build command, or commit the file. |
 | Native module fails on Cloudflare Workers | Using SQLite adapter on V8 isolate | Switch `lib/doks.config.ts` to `createD1Store`. |
 | `next dev` 500s on `/api/docs/search` for D1 setups | `getCloudflareContext()` has no Worker context under `next dev` | Add `initOpenNextCloudflareForDev()` to `next.config.mjs` (see Cloudflare Step 5). |
+| `bun install --frozen-lockfile` fails with "lockfile had changes" | `bun.lock` drifted from `package.json` (e.g., after a `doks-core` bump) | Run `bun install` locally and commit the updated `bun.lock`. Don't commit `package-lock.json` and `bun.lock` together. |
 | `npm run ingest` errors on D1 setup with `getCloudflareContext is not defined` | Ingest tried to load the runtime `lib/doks.config.ts` | Create `lib/doks.config.ingest.ts` with `createD1HttpStore` and run `DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest`. |
 | SSG pages 500 in production on Cloudflare with cache-related error | OpenNext incremental cache binding missing | Run `npx doks setup-cloudflare --skip-d1` to provision the R2 bucket, or add the `r2_buckets` block (binding `NEXT_INC_CACHE_R2_BUCKET`) to `wrangler.jsonc` manually. |
 
