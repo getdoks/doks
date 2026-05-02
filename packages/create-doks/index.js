@@ -17,10 +17,28 @@ import kleur from 'kleur';
 // Pinned to a tag so a `npx create-doks@0.2.x` always emits the
 // 0.2.x-shaped template even if `apps/site` on main moves ahead.
 // Bump in lock-step with doks-core releases that change the template.
-const DEFAULT_TEMPLATE = 'getdoks/doks#v0.3.0/apps/site';
+const DEFAULT_TEMPLATE = 'getdoks/doks#v0.3.1/apps/site';
 const THEMES = ['light', 'dark', 'blue-pearl', 'sand'];
 
 const DEPLOY_TARGETS = ['vercel', 'cloudflare'];
+
+const PACKAGE_MANAGERS = ['npm', 'bun', 'pnpm', 'yarn'];
+
+function detectInvokingPm() {
+  const ua = process.env.npm_config_user_agent || '';
+  if (ua.startsWith('bun')) return 'bun';
+  if (ua.startsWith('pnpm')) return 'pnpm';
+  if (ua.startsWith('yarn')) return 'yarn';
+  return 'npm';
+}
+
+function pmInstallCmd(pm) {
+  return pm === 'bun' ? 'bun install' : pm === 'yarn' ? 'yarn' : `${pm} install`;
+}
+
+function pmRunCmd(pm, script) {
+  return `${pm} run ${script}`;
+}
 
 function parseArgs(argv) {
   const args = { flags: {}, positional: [] };
@@ -34,6 +52,7 @@ function parseArgs(argv) {
     else if (a === '--samples') args.flags.samples = true;
     else if (a === '--no-samples') args.flags.samples = false;
     else if (a === '--target') args.flags.target = argv[++i];
+    else if (a === '--pm') args.flags.pm = argv[++i];
     else if (a.startsWith('--')) {
       console.error(kleur.red(`Unknown flag: ${a}`));
       process.exit(2);
@@ -44,6 +63,12 @@ function parseArgs(argv) {
   if (args.flags.target && !DEPLOY_TARGETS.includes(args.flags.target)) {
     console.error(
       kleur.red(`--target must be one of: ${DEPLOY_TARGETS.join(', ')}`),
+    );
+    process.exit(2);
+  }
+  if (args.flags.pm && !PACKAGE_MANAGERS.includes(args.flags.pm)) {
+    console.error(
+      kleur.red(`--pm must be one of: ${PACKAGE_MANAGERS.join(', ')}`),
     );
     process.exit(2);
   }
@@ -67,7 +92,9 @@ ${kleur.bold('Options:')}
   --no-samples           strip the demo content; start with a single index.mdx
   --target <host>        deploy target: 'vercel' (Node + SQLite, default) or
                          'cloudflare' (Workers + D1 + R2)
-  --no-install           skip 'npm install' after scaffolding
+  --pm <manager>         package manager: npm (default), bun, pnpm, or yarn.
+                         Auto-detected from how you invoked the CLI.
+  --no-install           skip the install step after scaffolding
   -y, --yes              accept defaults for all prompts
   -h, --help             show this help
 `);
@@ -143,6 +170,7 @@ async function main() {
         ? responses.samples
         : false;
   const deployTarget = flags.target || responses.deployTarget || 'vercel';
+  const pm = flags.pm || detectInvokingPm();
 
   const targetDir = resolve(targetName);
   if (existsSync(targetDir) && readdirSync(targetDir).length > 0) {
@@ -186,13 +214,14 @@ async function main() {
   }
 
   if (!flags.noInstall) {
-    console.log(kleur.dim('▸ installing dependencies…'));
+    const cmd = pmInstallCmd(pm);
+    console.log(kleur.dim(`▸ installing dependencies… (${cmd})`));
     try {
-      execSync('npm install', { cwd: targetDir, stdio: 'inherit' });
+      execSync(cmd, { cwd: targetDir, stdio: 'inherit' });
     } catch {
       console.error(
         kleur.yellow(
-          '⚠ npm install failed. Run it manually after fixing the issue.',
+          `⚠ \`${cmd}\` failed. Run it manually after fixing the issue.`,
         ),
       );
     }
@@ -201,13 +230,13 @@ async function main() {
   console.log(`\n${kleur.green('✓ done')}\n`);
   console.log('Next steps:');
   console.log(`  cd ${targetName}`);
-  if (flags.noInstall) console.log('  npm install');
+  if (flags.noInstall) console.log(`  ${pmInstallCmd(pm)}`);
   if (deployTarget === 'cloudflare') {
     console.log('  npx wrangler login');
     console.log('  npx doks deploy:cloudflare   # D1 + R2 + configs + token prompt');
-    console.log('  npm run dev');
+    console.log(`  ${pmRunCmd(pm, 'dev')}`);
   } else {
-    console.log('  npm run dev                  # auto-runs ingest on first run');
+    console.log(`  ${pmRunCmd(pm, 'dev')}            # auto-runs ingest on first run`);
   }
 }
 
