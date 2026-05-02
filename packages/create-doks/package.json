@@ -1,6 +1,6 @@
 {
   "name": "create-doks",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Scaffold a new doks documentation site.",
   "type": "module",
   "bin": {
