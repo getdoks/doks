@@ -31,5 +31,15 @@ data/*.db-journal
 data/*.db-wal
 data/*.db-shm
 
+# bundled-content runtime artifacts
+.doks/
+**/doks-content.gen.ts
+**/doks-content.gen.js
+
+# Cloudflare / OpenNext / Netlify local state
+.wrangler/
+.open-next/
+.netlify
+
 # CLI scaffolding scratch
 *.tgz

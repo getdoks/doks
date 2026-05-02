@@ -154,12 +154,15 @@ on `:root[data-theme="…"]`. Built-ins: `light`, `dark`, `blue-pearl`, `sand`.
 Two CLIs are published on npm:
 
 ```bash
-npx create-doks my-docs              # scaffold a new project
+npx create-doks my-docs              # scaffold a new project (prompts for deploy target)
 
 # Inside a doks project:
 npx doks upgrade                     # bump doks-core + run pending migrations
+npx doks ensure-index                # build data/docs.db if missing (predev hook)
+npx doks build:content               # snapshot content/docs/ into lib/doks-content.gen.ts
 npx doks d1:init [--remote|--local]  # provision the D1 chunks-table schema
-npx doks setup-cloudflare            # one-shot D1 + R2 + schema + wrangler.jsonc
+npx doks setup-cloudflare            # provision D1 + R2 + schema, print wrangler.jsonc
+npx doks deploy:cloudflare           # end-to-end: peers + provision + configs + token
 ```
 
 If you're hacking on the framework itself, work from the workspace
@@ -186,16 +189,18 @@ Set env vars (`VOYAGE_API_KEY`, …) in the Vercel dashboard. `data/docs.db`
 must exist at build time. Run `npm run ingest` as a build step or commit the
 artifact.
 
-For Cloudflare Workers swap `lib/doks.config.ts` to the D1 adapter and
-provision in one command:
+For Cloudflare Workers, scaffold with `--target cloudflare` (or pick it at
+the prompt) and finish provisioning in one command:
 
 ```bash
-npx doks setup-cloudflare    # creates D1 + R2, runs schema, prints wrangler.jsonc
+npx wrangler login
+npx doks deploy:cloudflare     # peers + D1 + R2 + configs + token prompt
+DOKS_CONFIG=lib/doks.config.ingest.ts npm run ingest
+npm run deploy
 ```
 
 See [`apps/site/content/docs/guides/deployment.mdx`](./apps/site/content/docs/guides/deployment.mdx)
-for the complete D1 walkthrough (incl. R2 incremental cache, `createD1HttpStore`
-ingest, OpenNext dev hook).
+for the complete walkthrough (and the manual path).
 
 ---
 
