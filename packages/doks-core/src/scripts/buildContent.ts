@@ -234,6 +234,101 @@ export async function buildContent(
   return { docs: captured.length, outFile };
 }
 
+export interface WatchContentOptions extends BuildContentOptions {
+  /** Debounce window in ms before re-running the generator. Default 100ms. */
+  debounceMs?: number;
+}
+
+/**
+ * Long-running variant: builds once, then watches the docs directory and
+ * regenerates on every MDX/_meta.json change. Returns a function that
+ * stops the watcher (close the chokidar instance, exit cleanly).
+ *
+ * Used by `doks build:content --watch`. Pair with Next's HMR for the
+ * full edit→reload loop: this regenerates `lib/doks-content.gen.ts`,
+ * which is in Next's module graph (imported from `app/layout.tsx`),
+ * so Next picks up the change and reloads.
+ */
+export async function watchContent(
+  options: WatchContentOptions = {},
+): Promise<() => Promise<void>> {
+  const root = options.root ?? process.cwd();
+  const docsDir = path.resolve(root, options.docsDir ?? 'content/docs');
+  const debounceMs = options.debounceMs ?? 100;
+  const log = options.silent ? () => {} : (m: string) => console.log(m);
+
+  // Initial build before watching so the dev server has a populated map
+  // immediately on first request.
+  await buildContent(options);
+
+  // Lazy-load chokidar so the non-watch path doesn't pay the cost.
+  const { default: chokidar } = await import('chokidar');
+
+  const watcher = chokidar.watch(docsDir, {
+    ignoreInitial: true,
+    awaitWriteFinish: { stabilityThreshold: 50, pollInterval: 30 },
+    ignored: (p, stats) =>
+      !!stats?.isFile() && !/\.(md|mdx|json)$/.test(p),
+  });
+
+  let pending: NodeJS.Timeout | null = null;
+  let inFlight = false;
+  let queued = false;
+
+  const run = async () => {
+    if (inFlight) {
+      queued = true;
+      return;
+    }
+    inFlight = true;
+    const start = Date.now();
+    try {
+      await buildContent({ ...options, silent: true });
+      log(`▸ build:content (${Date.now() - start}ms)`);
+    } catch (err) {
+      console.error('build:content failed:', (err as Error).message);
+    } finally {
+      inFlight = false;
+      if (queued) {
+        queued = false;
+        run();
+      }
+    }
+  };
+
+  const schedule = () => {
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(run, debounceMs);
+  };
+
+  watcher.on('all', (event, file) => {
+    // Only react to source files; chokidar's ignore filter already cuts
+    // most noise, but double-check here for the directory-level events.
+    if (
+      event === 'add' ||
+      event === 'change' ||
+      event === 'unlink' ||
+      event === 'addDir' ||
+      event === 'unlinkDir'
+    ) {
+      if (file && /\.(md|mdx|json)$/.test(file)) {
+        schedule();
+      } else if (event === 'addDir' || event === 'unlinkDir') {
+        // Directory changes can affect the content map even without a
+        // file event firing.
+        schedule();
+      }
+    }
+  });
+
+  log(`▸ watching ${path.relative(root, docsDir) || '.'} for changes…`);
+
+  return async () => {
+    if (pending) clearTimeout(pending);
+    await watcher.close();
+  };
+}
+
 // CLI entrypoint.
 const isMain =
   typeof process !== 'undefined' &&
@@ -241,8 +336,26 @@ const isMain =
   /scripts[\\/]buildContent\.[mc]?[jt]s$/.test(process.argv[1]);
 
 if (isMain) {
-  buildContent().catch((err) => {
-    console.error('build:content failed:', err);
-    process.exit(1);
-  });
+  const argv = process.argv.slice(2);
+  const watch = argv.includes('--watch') || argv.includes('-w');
+  if (watch) {
+    watchContent()
+      .then((stop) => {
+        const shutdown = async () => {
+          await stop();
+          process.exit(0);
+        };
+        process.on('SIGINT', shutdown);
+        process.on('SIGTERM', shutdown);
+      })
+      .catch((err) => {
+        console.error('build:content --watch failed:', err);
+        process.exit(1);
+      });
+  } else {
+    buildContent().catch((err) => {
+      console.error('build:content failed:', err);
+      process.exit(1);
+    });
+  }
 }

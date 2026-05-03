@@ -63,12 +63,14 @@ Usage:
                                 \`predev\` hook so first-time \`npm run dev\` does
                                 not show an empty search panel. Skips silently
                                 for non-SQLite adapters.
-  doks build:content            Generate \`lib/doks-content.gen.ts\` from the
-                                \`content/docs/\` tree. Snapshot of every MDX
-                                file (frontmatter + raw source + slug) so doc
-                                pages can render at request time on edge
-                                runtimes without filesystem access. Used as a
-                                \`predev\` / \`prebuild\` hook by the scaffold.
+  doks build:content [--watch]  Generate \`lib/doks-content.gen.ts\` from the
+                                \`content/docs/\` tree. Each MDX is precompiled
+                                via @mdx-js/mdx into \`.doks/compiled/<slug>.mjs\`
+                                so doc pages render at request time on edge
+                                runtimes (no fs, no eval). Used as a \`predev\`
+                                / \`prebuild\` hook by the scaffold. Pass
+                                --watch (or -w) to keep regenerating on MDX
+                                edits during dev.
   doks d1:init [--remote <db>]  Print the D1 schema (pipe into wrangler) or,
                                 with --remote/--local, run it against a
                                 configured D1. Wrangler must be installed.
@@ -735,7 +737,18 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
         `if you're working in the workspace). Inner error: ${(err && err.message) || err}`,
     );
   }
-  mod.buildContent();
+  const args = process.argv.slice(3);
+  if (args.includes('--watch') || args.includes('-w')) {
+    const stop = await mod.watchContent();
+    const shutdown = async () => {
+      await stop();
+      process.exit(0);
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+  } else {
+    await mod.buildContent();
+  }
 } else if (cmd === 'd1:init') {
   d1Init(process.argv.slice(3));
 } else if (cmd === 'setup-cloudflare') {
