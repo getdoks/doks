@@ -135,10 +135,14 @@ export default function LeftSidebar({
           })}
         </nav>
         <div className="sidebar-version">
-          <div className="sv-info">
-            <span className="sv-pulse" />
-            <span>v0.1.0 · main</span>
-          </div>
+          <a
+            className="sv-info"
+            href="https://github.com/getdoks/doks"
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            Powered by <strong>doks</strong>.
+          </a>
         </div>
       </div>
     </aside>
