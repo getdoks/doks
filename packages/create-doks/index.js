@@ -17,7 +17,7 @@ import kleur from 'kleur';
 // Pinned to a tag so a `npx create-doks@0.2.x` always emits the
 // 0.2.x-shaped template even if `apps/site` on main moves ahead.
 // Bump in lock-step with doks-core releases that change the template.
-const DEFAULT_TEMPLATE = 'getdoks/doks/apps/site#v0.3.7';
+const DEFAULT_TEMPLATE = 'getdoks/doks/apps/site#v0.3.8';
 const THEMES = ['light', 'dark', 'blue-pearl', 'sand'];
 
 const DEPLOY_TARGETS = ['vercel', 'cloudflare'];
@@ -203,6 +203,8 @@ async function main() {
   console.log(kleur.dim('▸ writing package.json…'));
   rewritePackageJson(targetDir, { targetName, deployTarget });
 
+  rewriteNextConfig(targetDir);
+
   if (!samples) {
     console.log(kleur.dim('▸ stripping demo content…'));
     stripSampleContent(targetDir, { siteName });
@@ -238,6 +240,25 @@ async function main() {
   } else {
     console.log(`  ${pmRunCmd(pm, 'dev')}            # auto-runs ingest on first run`);
   }
+}
+
+// The monorepo's apps/site pins Turbopack to `resolve(__dirname, '..', '..')`
+// so it picks up workspace-hoisted deps. A scaffolded consumer is a
+// standalone project — its deps live next to next.config.mjs — so the
+// pin should be the project dir itself. Rewrite the two-line form back
+// to `import.meta.dirname` and drop the now-unused `resolve` import.
+function rewriteNextConfig(target) {
+  const path = join(target, 'next.config.mjs');
+  if (!existsSync(path)) return;
+  const src = readFileSync(path, 'utf8');
+  if (!src.includes("resolve(import.meta.dirname, '..', '..')")) return;
+  const next = src
+    .replace(
+      "resolve(import.meta.dirname, '..', '..')",
+      'import.meta.dirname',
+    )
+    .replace(/^import \{ resolve \} from 'node:path';\n+/m, '');
+  writeFileSync(path, next);
 }
 
 function writeSiteConfig(target, { siteName, githubUrl, theme }) {
