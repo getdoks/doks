@@ -83,6 +83,26 @@ test('scaffolds with --samples (full demo corpus retained)', () => {
     assert.match(cfg, /siteName: "My Docs"/, 'siteName written');
     assert.match(cfg, /logoText: "My Docs"/, 'logoText written');
     assert.match(cfg, /defaultTheme: "light"/, 'defaultTheme written');
+
+    // The monorepo's apps/site pins Turbopack to `resolve(__dirname, '..', '..')`
+    // so workspace-hoisted deps resolve. Consumers are standalone, so the
+    // pin must be rewritten to `import.meta.dirname`.
+    const nextCfg = readFileSync(join(target, 'next.config.mjs'), 'utf8');
+    assert.match(
+      nextCfg,
+      /turbopack:\s*\{\s*root:\s*import\.meta\.dirname,\s*\},/,
+      'turbopack.root rewritten to import.meta.dirname',
+    );
+    assert.doesNotMatch(
+      nextCfg,
+      /resolve\(import\.meta\.dirname/,
+      'monorepo-shaped resolve() pin removed',
+    );
+    assert.doesNotMatch(
+      nextCfg,
+      /^import \{ resolve \} from 'node:path';/m,
+      'unused `resolve` import removed',
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
