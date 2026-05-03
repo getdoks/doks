@@ -12,6 +12,8 @@
 // import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 // initOpenNextCloudflareForDev();
 
+import { resolve } from 'node:path';
+
 import { withDoks } from 'doks-core/next';
 
 /** @type {import('next').NextConfig} */
@@ -21,6 +23,18 @@ const nextConfig = {
 
   // better-sqlite3 + sqlite-vec ship native bindings; never bundle them.
   serverExternalPackages: ['better-sqlite3', 'sqlite-vec'],
+
+  // Pin Turbopack's workspace root. Without this, Turbopack walks up
+  // looking for the nearest lockfile and may pick a stray one in a
+  // parent / sibling directory, warning on every dev start.
+  //
+  // In the doks monorepo this points at the repo root so Turbopack can
+  // see hoisted workspace deps (Next, etc.). `create-doks` rewrites
+  // this to `import.meta.dirname` when scaffolding a standalone
+  // consumer — see packages/create-doks/index.js.
+  turbopack: {
+    root: resolve(import.meta.dirname, '..', '..'),
+  },
 };
 
 // `withDoks` runs the build-time content generator (writes
