@@ -60,7 +60,7 @@ npm run dev
 | `--target <host>` | Deploy target: `vercel` (Node + SQLite, default) or `cloudflare` (Workers + D1 + R2). Skips the prompt. |
 | `--no-install` | Skip `npm install` after scaffolding. |
 | `-y`, `--yes` | Accept all defaults; useful for non-interactive scripts. |
-| `--template <spec>` | Use a different `degit` spec (default `getdoks/doks/apps/site#v0.3.5`, pinned to the tag matching this CLI version). |
+| `--template <spec>` | Use a different `degit` spec (default `getdoks/doks/apps/site#v0.3.6`, pinned to the tag matching this CLI version). |
 | `--template-path <dir>` | Copy from a local directory instead of cloning (used in CI / dev). |
 | `-h`, `--help` | Show usage. |
 

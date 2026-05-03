@@ -17,7 +17,7 @@ import kleur from 'kleur';
 // Pinned to a tag so a `npx create-doks@0.2.x` always emits the
 // 0.2.x-shaped template even if `apps/site` on main moves ahead.
 // Bump in lock-step with doks-core releases that change the template.
-const DEFAULT_TEMPLATE = 'getdoks/doks/apps/site#v0.3.5';
+const DEFAULT_TEMPLATE = 'getdoks/doks/apps/site#v0.3.6';
 const THEMES = ['light', 'dark', 'blue-pearl', 'sand'];
 
 const DEPLOY_TARGETS = ['vercel', 'cloudflare'];
