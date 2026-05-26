@@ -176,6 +176,54 @@ test('refuses to overwrite a non-empty target', () => {
   }
 });
 
+test('scaffolds with --target cloudflare (split cf:* scripts + typegen)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'doks-cli-'));
+  const target = join(dir, 'cf');
+  try {
+    runCli(
+      `${JSON.stringify(target)} --yes --no-install --target cloudflare --template-path ${JSON.stringify(TEMPLATE)}`,
+    );
+
+    const pkg = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'));
+
+    // Workers Builds (the Cloudflare UI) takes separate Build and
+    // Deploy commands. The split scripts let users wire each field.
+    assert.equal(
+      pkg.scripts['cf:build'],
+      'opennextjs-cloudflare build',
+      'cf:build script present',
+    );
+    assert.equal(
+      pkg.scripts['cf:deploy'],
+      'opennextjs-cloudflare deploy',
+      'cf:deploy script present',
+    );
+
+    // cf-typegen lets users regenerate cloudflare-env.d.ts after
+    // wrangler.jsonc edits without remembering the wrangler invocation.
+    assert.equal(
+      pkg.scripts['cf-typegen'],
+      'wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts',
+      'cf-typegen script present',
+    );
+
+    // `npm run deploy` still does the chained build+deploy for the
+    // local one-shot case (back-compat with older docs).
+    assert.equal(
+      pkg.scripts.deploy,
+      'npm run cf:build && npm run cf:deploy',
+      'deploy script chains the split commands',
+    );
+
+    // Cloudflare peer deps are declared.
+    assert.ok(pkg.devDependencies['@opennextjs/cloudflare']);
+    assert.ok(pkg.devDependencies['wrangler']);
+    assert.ok(pkg.devDependencies['@cloudflare/workers-types']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('--help prints usage and exits 0', () => {
   const out = runCli('--help');
   assert.match(out, /create-doks/);

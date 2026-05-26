@@ -17,7 +17,7 @@ import kleur from 'kleur';
 // Pinned to a tag so a `npx create-doks@0.2.x` always emits the
 // 0.2.x-shaped template even if `apps/site` on main moves ahead.
 // Bump in lock-step with doks-core releases that change the template.
-const DEFAULT_TEMPLATE = 'getdoks/doks/apps/site#v0.3.8';
+const DEFAULT_TEMPLATE = 'getdoks/doks/apps/site#v0.3.9';
 const THEMES = ['light', 'dark', 'blue-pearl', 'sand'];
 
 const DEPLOY_TARGETS = ['vercel', 'cloudflare'];
@@ -311,9 +311,15 @@ function rewritePackageJson(target, { targetName, deployTarget }) {
     pkg.devDependencies['wrangler'] =
       pkg.devDependencies['wrangler'] || 'latest';
     pkg.scripts = pkg.scripts || {};
-    pkg.scripts.deploy =
-      pkg.scripts.deploy ||
-      'opennextjs-cloudflare build && opennextjs-cloudflare deploy';
+    // Split scripts so Workers Builds (which uses separate Build /
+    // Deploy command fields in the UI) can target them directly.
+    // Local one-shot: `npm run deploy` still chains the two.
+    pkg.scripts['cf:build'] = pkg.scripts['cf:build'] || 'opennextjs-cloudflare build';
+    pkg.scripts['cf:deploy'] = pkg.scripts['cf:deploy'] || 'opennextjs-cloudflare deploy';
+    pkg.scripts['cf-typegen'] =
+      pkg.scripts['cf-typegen'] ||
+      'wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts';
+    pkg.scripts.deploy = pkg.scripts.deploy || 'npm run cf:build && npm run cf:deploy';
     // The SQLite ensure-index step is meaningless on D1; the content
     // generator (`doks build:content`) is still required so the doc
     // pages can render without filesystem reads on the edge.
