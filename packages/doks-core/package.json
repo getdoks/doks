@@ -1,6 +1,6 @@
 {
   "name": "doks-core",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -21,6 +21,7 @@
     "./adapters/d1": "./dist/adapters/d1/index.js",
     "./adapters/d1/http": "./dist/adapters/d1/http.js",
     "./cloudflare/open-next": "./dist/cloudflare/openNext.js",
+    "./cloudflare/open-next/no-cache": "./dist/cloudflare/openNextNoCache.js",
     "./next": "./dist/next/index.js",
     "./runtime/content": "./dist/runtime/content.js",
     "./scripts/buildContent": "./dist/scripts/buildContent.js"
