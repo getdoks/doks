@@ -77,23 +77,25 @@ Usage:
   doks d1:init --local <db>     Run the schema against a local D1 (wrangler
                                 d1 execute --local).
   doks setup-cloudflare         One-shot Cloudflare provisioner: creates a
-                                D1 database, an R2 bucket, runs the chunks
-                                schema, and prints a wrangler.jsonc snippet.
-                                Flags:
-                                  --db <name>      D1 database name
-                                  --bucket <name>  R2 bucket name (cache)
-                                  --worker <name>  Worker name
-                                  --skip-d1        skip D1 create+schema
-                                  --skip-r2        skip R2 bucket create
-                                  --skip-schema    skip running chunks schema
+                                D1 database (and R2 bucket unless --skip-r2),
+                                runs the chunks schema, writes wrangler.jsonc,
+                                and runs \`wrangler types\` to generate
+                                cloudflare-env.d.ts. Prompts before touching
+                                your account; use --yes for CI, --dry-run for
+                                a plan-only view. \`doks setup-cloudflare --help\`
+                                for the full flag list (incl. --env <name> for
+                                multi-env).
   doks deploy:cloudflare        End-to-end Cloudflare wiring: install peer
                                 deps, provision D1 + R2, write wrangler.jsonc,
                                 swap lib/doks.config.ts to D1, write
                                 lib/doks.config.ingest.ts, uncomment the
                                 OpenNext dev hook in next.config.mjs, write
-                                open-next.config.ts, and prompt for the
-                                Cloudflare API token to populate .env.local.
-                                Add --dry-run to see the plan without writing.
+                                open-next.config.ts (R2 or in-memory cache
+                                depending on --skip-r2), run \`wrangler types\`,
+                                and prompt for the Cloudflare API token to
+                                populate .env.local. Add --dry-run to see the
+                                plan without writing. Accepts the same flags
+                                as setup-cloudflare.
   doks --help                   Show this help.
 
 Run inside a project that has 'doks-core' as a dependency.
@@ -161,7 +163,96 @@ function d1Init(args) {
   }
 }
 
-function provisionCloudflare(args) {
+// ---------------------------------------------------------------
+// setup-cloudflare flag parser.
+//
+// Whitelisted. Unknown flags exit with a clear error so a typo (or
+// `--help` on a previous version that ignored unknown flags) never
+// silently runs the bootstrap and creates real Cloudflare resources.
+// ---------------------------------------------------------------
+const SETUP_CF_FLAGS = {
+  '--help': { type: 'bool', short: '-h' },
+  '--dry-run': { type: 'bool' },
+  '--yes': { type: 'bool', short: '-y' },
+  '--env': { type: 'string' },
+  '--db': { type: 'string' },
+  '--bucket': { type: 'string' },
+  '--worker': { type: 'string' },
+  '--skip-d1': { type: 'bool' },
+  '--skip-r2': { type: 'bool' },
+  '--skip-schema': { type: 'bool' },
+  '--skip-types': { type: 'bool' },
+  '--skip-write': { type: 'bool' },
+};
+
+function camel(name) {
+  return name.replace(/^--/, '').replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+function parseSetupCloudflareArgs(args, { allowDryRun = true } = {}) {
+  const flags = {};
+  const shortMap = {};
+  for (const [name, def] of Object.entries(SETUP_CF_FLAGS)) {
+    if (def.short) shortMap[def.short] = name;
+  }
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    const canonical = shortMap[a] || a;
+    const def = SETUP_CF_FLAGS[canonical];
+    if (!def) {
+      fail(
+        `Unknown flag: ${a}. Run \`doks setup-cloudflare --help\` for usage.`,
+        2,
+      );
+    }
+    if (def.type === 'bool') {
+      flags[camel(canonical)] = true;
+    } else {
+      const v = args[i + 1];
+      if (!v || v.startsWith('-')) {
+        fail(`Flag ${a} requires a value.`, 2);
+      }
+      flags[camel(canonical)] = v;
+      i++;
+    }
+  }
+  if (!allowDryRun) delete flags.dryRun;
+  return flags;
+}
+
+const SETUP_CF_HELP = `
+doks setup-cloudflare — provision D1 + R2 and write wrangler.jsonc.
+
+Usage:
+  doks setup-cloudflare [options]
+
+Options:
+  --help, -h        Show this help and exit
+  --dry-run         Print the plan; create no resources, write no files
+  --yes, -y         Skip the confirmation prompt (required in CI)
+  --env <name>      Multi-env mode. Wrap config under \`env.<name>\` and
+                    suffix default resource names with \`-<name>\`
+  --db <name>       D1 database name (default: <project>-vectors[-<env>])
+  --bucket <name>   R2 bucket name (default: <project>-cache[-<env>])
+  --worker <name>   Worker name      (default: <project>[-<env>])
+  --skip-d1         Don't create D1 (and omit d1_databases from snippet)
+  --skip-r2         Don't create R2 (and omit r2_buckets from snippet)
+  --skip-schema     Don't run the chunks schema against D1
+  --skip-types      Don't run \`wrangler types\` after writing wrangler.jsonc
+  --skip-write      Don't write wrangler.jsonc (print snippet only)
+
+Notes:
+  By default the command CREATES real Cloudflare resources (D1, R2)
+  and writes \`wrangler.jsonc\` in the current directory. Use --dry-run
+  first if you want to see the plan.
+
+  Multi-env (--env staging): if wrangler.jsonc already exists, the
+  existing file is backed up to wrangler.jsonc.bak and rewritten with
+  the new env block. Merge by hand if you need both production and a
+  staging env in one file.
+`.trim();
+
+function provisionCloudflare(flags) {
   const cwd = process.cwd();
   const { pkg } = readUserPkg(cwd);
   const projectSlug = String(pkg.name || 'doks-site')
@@ -170,21 +261,15 @@ function provisionCloudflare(args) {
     .toLowerCase()
     .replace(/^-+|-+$/g, '') || 'doks-site';
 
-  const flagValue = (name) => {
-    const i = args.indexOf(name);
-    if (i < 0) return null;
-    const v = args[i + 1];
-    return v && !v.startsWith('-') ? v : null;
-  };
+  // Suffix default names with -<env> when in multi-env mode. Explicit
+  // --worker / --db / --bucket overrides are taken verbatim.
+  const envSuffix = flags.env ? `-${flags.env}` : '';
+  const worker = flags.worker || `${projectSlug}${envSuffix}`;
+  const db = flags.db || `${projectSlug}-vectors${envSuffix}`;
+  const bucket = flags.bucket || `${projectSlug}-cache${envSuffix}`;
+  const { skipD1, skipR2, skipSchema, dryRun } = flags;
 
-  const worker = flagValue('--worker') || projectSlug;
-  const db = flagValue('--db') || `${projectSlug}-vectors`;
-  const bucket = flagValue('--bucket') || `${projectSlug}-cache`;
-  const skipD1 = args.includes('--skip-d1');
-  const skipR2 = args.includes('--skip-r2');
-  const skipSchema = args.includes('--skip-schema');
-
-  console.log('▸ doks setup-cloudflare');
+  console.log(`▸ doks setup-cloudflare${dryRun ? ' (dry-run)' : ''}${flags.env ? ` (env: ${flags.env})` : ''}`);
   console.log(`  worker: ${worker}`);
   console.log(`  d1:     ${skipD1 ? '(skipped)' : db}`);
   console.log(`  r2:     ${skipR2 ? '(skipped)' : bucket}`);
@@ -192,92 +277,73 @@ function provisionCloudflare(args) {
 
   let dbId = null;
   if (!skipD1) {
-    console.log(`▸ wrangler d1 create ${db}`);
-    let out;
-    try {
-      out = execSync(`npx wrangler d1 create ${db}`, { encoding: 'utf8' });
-      process.stdout.write(out);
-    } catch (e) {
-      const stderr = String(e.stderr || e.stdout || '');
-      if (/already exists/i.test(stderr)) {
-        console.log(`  ⚠ D1 '${db}' already exists. Skipping create.`);
-        console.log(
-          `  Look up the database_id with: npx wrangler d1 list`,
-        );
-      } else {
-        fail(
-          `wrangler d1 create failed:\n${stderr || e.message}\n\n` +
-            `Authenticate with \`npx wrangler login\` and try again.`,
-        );
-      }
-    }
-    if (out) {
-      const m = out.match(/database_id\s*=\s*"([0-9a-f-]{36})"/i);
-      if (m) dbId = m[1];
-    }
-
-    if (!skipSchema) {
-      console.log(`▸ running chunks schema against ${db}`);
-      const tmp = join(cwd, '.doks-d1-init.sql');
+    if (dryRun) {
+      console.log(`▸ would: npx wrangler d1 create ${db}`);
+      if (!skipSchema) console.log(`▸ would: run chunks schema against ${db}`);
+    } else {
+      console.log(`▸ wrangler d1 create ${db}`);
+      let out;
       try {
-        writeFileSync(tmp, D1_SCHEMA);
-        execSync(
-          `npx wrangler d1 execute ${db} --remote --file=${tmp}`,
-          { stdio: 'inherit' },
-        );
+        out = execSync(`npx wrangler d1 create ${db}`, { encoding: 'utf8' });
+        process.stdout.write(out);
       } catch (e) {
-        console.error(`  ✗ schema failed: ${e.message}`);
-      } finally {
-        try { unlinkSync(tmp); } catch { /* ignore */ }
+        const stderr = String(e.stderr || e.stdout || '');
+        if (/already exists/i.test(stderr)) {
+          console.log(`  ⚠ D1 '${db}' already exists. Skipping create.`);
+          console.log(`  Look up the database_id with: npx wrangler d1 list`);
+        } else {
+          fail(
+            `wrangler d1 create failed:\n${stderr || e.message}\n\n` +
+              `Authenticate with \`npx wrangler login\` and try again.`,
+          );
+        }
+      }
+      if (out) {
+        const m = out.match(/database_id\s*=\s*"([0-9a-f-]{36})"/i);
+        if (m) dbId = m[1];
+      }
+
+      if (!skipSchema) {
+        console.log(`▸ running chunks schema against ${db}`);
+        const tmp = join(cwd, '.doks-d1-init.sql');
+        try {
+          writeFileSync(tmp, D1_SCHEMA);
+          execSync(
+            `npx wrangler d1 execute ${db} --remote --file=${tmp}`,
+            { stdio: 'inherit' },
+          );
+        } catch (e) {
+          console.error(`  ✗ schema failed: ${e.message}`);
+        } finally {
+          try { unlinkSync(tmp); } catch { /* ignore */ }
+        }
       }
     }
   }
 
   if (!skipR2) {
-    console.log(`▸ wrangler r2 bucket create ${bucket}`);
-    try {
-      execSync(`npx wrangler r2 bucket create ${bucket}`, {
-        stdio: 'inherit',
-      });
-    } catch (e) {
-      const stderr = String(e.stderr || '');
-      if (/already exists/i.test(stderr)) {
-        console.log(`  ⚠ R2 bucket '${bucket}' already exists. Skipping.`);
-      } else {
-        console.error(`  ⚠ r2 bucket create returned non-zero. Continuing.`);
+    if (dryRun) {
+      console.log(`▸ would: npx wrangler r2 bucket create ${bucket}`);
+    } else {
+      console.log(`▸ wrangler r2 bucket create ${bucket}`);
+      try {
+        execSync(`npx wrangler r2 bucket create ${bucket}`, { stdio: 'inherit' });
+      } catch (e) {
+        const stderr = String(e.stderr || '');
+        if (/already exists/i.test(stderr)) {
+          console.log(`  ⚠ R2 bucket '${bucket}' already exists. Skipping.`);
+        } else {
+          console.error(`  ⚠ r2 bucket create returned non-zero. Continuing.`);
+        }
       }
     }
   }
 
-  // Emit a wrangler.jsonc snippet the user can merge into their config.
-  const snippet = {
-    $schema: 'node_modules/wrangler/config-schema.json',
+  // The block of wrangler.jsonc keys that describes one worker / env.
+  // In multi-env mode this lives under env.<name>; otherwise it's the
+  // top-level config.
+  const envBlock = {
     name: worker,
-    main: '.open-next/worker.js',
-    compatibility_date: new Date().toISOString().slice(0, 10),
-    compatibility_flags: ['nodejs_compat'],
-    observability: {
-      enabled: false,
-      head_sampling_rate: 1,
-      logs: {
-        enabled: true,
-        head_sampling_rate: 1,
-        persist: true,
-        invocation_logs: true,
-      },
-      traces: {
-        enabled: false,
-        persist: true,
-        head_sampling_rate: 1,
-      },
-    },
-    assets: {
-      directory: '.open-next/assets',
-      binding: 'ASSETS',
-    },
-    services: [
-      { binding: 'WORKER_SELF_REFERENCE', service: worker },
-    ],
     ...(skipD1
       ? {}
       : {
@@ -293,32 +359,111 @@ function provisionCloudflare(args) {
       ? {}
       : {
           r2_buckets: [
-            {
-              binding: 'NEXT_INC_CACHE_R2_BUCKET',
-              bucket_name: bucket,
-            },
+            { binding: 'NEXT_INC_CACHE_R2_BUCKET', bucket_name: bucket },
           ],
         }),
+    services: [{ binding: 'WORKER_SELF_REFERENCE', service: worker }],
   };
 
-  return { worker, db, bucket, dbId, snippet, skipD1, skipR2 };
+  const baseSnippet = {
+    $schema: 'node_modules/wrangler/config-schema.json',
+    main: '.open-next/worker.js',
+    compatibility_date: new Date().toISOString().slice(0, 10),
+    compatibility_flags: ['nodejs_compat'],
+    observability: {
+      enabled: false,
+      head_sampling_rate: 1,
+      logs: {
+        enabled: true,
+        head_sampling_rate: 1,
+        persist: true,
+        invocation_logs: true,
+      },
+      traces: { enabled: false, persist: true, head_sampling_rate: 1 },
+    },
+    assets: { directory: '.open-next/assets', binding: 'ASSETS' },
+  };
+
+  const snippet = flags.env
+    ? { ...baseSnippet, env: { [flags.env]: envBlock } }
+    : { ...baseSnippet, ...envBlock };
+
+  return { worker, db, bucket, dbId, snippet, skipD1, skipR2, useR2: !skipR2 };
 }
 
-function setupCloudflare(args) {
-  const result = provisionCloudflare(args);
+function runWranglerTypes(cwd, dryRun) {
+  const cmd = 'npx wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts';
+  if (dryRun) {
+    console.log(`▸ would: ${cmd}`);
+    return;
+  }
+  console.log(`▸ ${cmd}`);
+  try {
+    execSync(cmd, { cwd, stdio: 'inherit' });
+    console.log('  + wrote cloudflare-env.d.ts');
+  } catch (e) {
+    console.error(
+      `  ⚠ wrangler types failed (${e.message || 'non-zero exit'}). ` +
+        `Re-run manually after fixing the wrangler config.`,
+    );
+  }
+}
+
+async function setupCloudflareCmd(args) {
+  const flags = parseSetupCloudflareArgs(args);
+  if (flags.help) {
+    console.log(SETUP_CF_HELP);
+    return;
+  }
+  const cwd = process.cwd();
+
+  // Show the plan and (unless --yes or --dry-run) confirm before we
+  // touch the user's Cloudflare account.
+  if (!flags.dryRun && !flags.yes) {
+    const projectSlug = String(readUserPkg(cwd).pkg.name || 'doks-site');
+    const envSuffix = flags.env ? `-${flags.env}` : '';
+    console.log('▸ doks setup-cloudflare will create real Cloudflare resources:');
+    if (!flags.skipD1) console.log(`    - D1 database  ${flags.db || `${projectSlug}-vectors${envSuffix}`}`);
+    if (!flags.skipR2) console.log(`    - R2 bucket    ${flags.bucket || `${projectSlug}-cache${envSuffix}`}`);
+    if (!flags.skipWrite) console.log(`    - writes       wrangler.jsonc (existing → wrangler.jsonc.bak)`);
+    if (!flags.skipTypes) console.log(`    - writes       cloudflare-env.d.ts`);
+    console.log('');
+    const answer = (await prompt('  Proceed? [y/N] ')).trim().toLowerCase();
+    if (answer !== 'y' && answer !== 'yes') {
+      console.log('  Aborted. Re-run with --yes to skip this prompt, or --dry-run to see the plan.');
+      return;
+    }
+    console.log('');
+  }
+
+  const result = provisionCloudflare(flags);
   console.log('');
-  console.log('▸ wrangler.jsonc snippet (merge into your file):');
+
+  if (flags.skipWrite) {
+    console.log('▸ wrangler.jsonc snippet (merge into your file):');
+    console.log('');
+    console.log(JSON.stringify(result.snippet, null, 2));
+    console.log('');
+  } else {
+    writeWranglerJsonc(cwd, result.snippet, flags.dryRun);
+  }
+
+  if (!flags.skipTypes && !flags.skipWrite) {
+    runWranglerTypes(cwd, flags.dryRun);
+  }
+
   console.log('');
-  console.log(JSON.stringify(result.snippet, null, 2));
-  console.log('');
-  console.log('Next steps:');
-  console.log('  1. Save the snippet above to wrangler.jsonc.');
-  console.log('  2. Switch lib/doks.config.ts to the D1 adapter (see docs).');
-  console.log('  3. Add `export { default } from "doks-core/cloudflare/open-next";`');
+  console.log('Next:');
+  console.log('  1. Switch lib/doks.config.ts to the D1 adapter (see docs).');
+  console.log(
+    '  2. Add `export { default } from "doks-core/cloudflare/open-next' +
+      (result.useR2 ? '' : '/no-cache') +
+      '";`',
+  );
   console.log('     to open-next.config.ts.');
-  console.log('  4. Ingest:');
+  console.log('  3. Ingest:');
   console.log(`       DOKS_CONFIG=lib/doks.config.ingest.ts ${pmRun('ingest')}`);
-  console.log(`  5. Deploy: ${pmRun('deploy')}`);
+  console.log(`  4. Deploy: ${pmRun('cf:deploy')} (or ${pmRun('deploy')} for build+deploy)`);
   console.log('');
   console.log('Or run `doks deploy:cloudflare` to do all of the above in one go.');
   return result;
@@ -483,12 +628,19 @@ export const vectorStore: VectorStore = createD1HttpStore({
 });
 `;
 
-const OPEN_NEXT_CONFIG = `// Cloudflare-only: read by \`opennextjs-cloudflare build\`.
-// Re-exports the doks-core default config (R2-backed incremental cache,
-// binding NEXT_INC_CACHE_R2_BUCKET).
+function openNextConfigSource({ useR2 }) {
+  return useR2
+    ? `// Cloudflare-only: read by \`opennextjs-cloudflare build\`.
+// Re-exports the doks-core R2-backed config (binding NEXT_INC_CACHE_R2_BUCKET).
 
 export { default } from "doks-core/cloudflare/open-next";
+`
+    : `// Cloudflare-only: read by \`opennextjs-cloudflare build\`.
+// In-memory incremental cache (no R2 binding required).
+
+export { default } from "doks-core/cloudflare/open-next/no-cache";
 `;
+}
 
 function ensurePeerDeps(cwd, pkg, dryRun) {
   const required = [
@@ -581,7 +733,7 @@ function writeIngestConfig(cwd, dryRun) {
   console.log(`  + wrote ${rel}`);
 }
 
-function writeOpenNextConfig(cwd, dryRun) {
+function writeOpenNextConfig(cwd, dryRun, { useR2 }) {
   const rel = 'open-next.config.ts';
   const path = join(cwd, rel);
   if (existsSync(path)) {
@@ -594,11 +746,11 @@ function writeOpenNextConfig(cwd, dryRun) {
     return;
   }
   if (dryRun) {
-    console.log(`▸ would write ${rel}`);
+    console.log(`▸ would write ${rel} (${useR2 ? 'R2-backed' : 'in-memory'} cache)`);
     return;
   }
-  writeFileSync(path, OPEN_NEXT_CONFIG);
-  console.log(`  + wrote ${rel}`);
+  writeFileSync(path, openNextConfigSource({ useR2 }));
+  console.log(`  + wrote ${rel} (${useR2 ? 'R2-backed' : 'in-memory'} cache)`);
 }
 
 function uncommentOpenNextDevHook(cwd, dryRun) {
@@ -670,7 +822,12 @@ async function writeEnvLocal(cwd, dryRun) {
 }
 
 async function deployCloudflare(args) {
-  const dryRun = args.includes('--dry-run');
+  const flags = parseSetupCloudflareArgs(args);
+  if (flags.help) {
+    console.log(SETUP_CF_HELP.replace('setup-cloudflare', 'deploy:cloudflare'));
+    return;
+  }
+  const { dryRun } = flags;
   const cwd = process.cwd();
   const { pkg } = readUserPkg(cwd);
 
@@ -685,24 +842,22 @@ async function deployCloudflare(args) {
   }
   console.log('');
 
-  // Provision D1 + R2 (also runs schema unless --skip-schema).
-  let result;
-  if (dryRun) {
-    console.log('▸ would run setup-cloudflare to provision D1 + R2');
-    // Build a fake snippet so the file mutations still get a sensible plan.
-    result = {
-      snippet: { name: '<worker-name>', d1_databases: [], r2_buckets: [] },
-    };
-  } else {
-    result = provisionCloudflare(args.filter((a) => a !== '--dry-run'));
-  }
+  // Provision D1 + R2 (also runs schema unless --skip-schema). The
+  // provisioner internally short-circuits on dryRun so wrangler is
+  // never invoked in that mode.
+  const result = provisionCloudflare(flags);
   console.log('');
 
-  writeWranglerJsonc(cwd, result.snippet, dryRun);
+  if (!flags.skipWrite) {
+    writeWranglerJsonc(cwd, result.snippet, dryRun);
+  }
   writeRuntimeConfig(cwd, dryRun);
   writeIngestConfig(cwd, dryRun);
-  writeOpenNextConfig(cwd, dryRun);
+  writeOpenNextConfig(cwd, dryRun, { useR2: result.useR2 });
   uncommentOpenNextDevHook(cwd, dryRun);
+  if (!flags.skipTypes && !flags.skipWrite) {
+    runWranglerTypes(cwd, dryRun);
+  }
   console.log('');
 
   await writeEnvLocal(cwd, dryRun);
@@ -714,7 +869,7 @@ async function deployCloudflare(args) {
   }
   console.log('▸ done. Next:');
   console.log(`    DOKS_CONFIG=lib/doks.config.ingest.ts ${pmRun('ingest')}`);
-  console.log(`    ${pmRun('deploy')}`);
+  console.log(`    ${pmRun('cf:deploy')}    # or \`${pmRun('deploy')}\` for build+deploy`);
 }
 
 const cmd = process.argv[2];
@@ -752,7 +907,7 @@ if (!cmd || cmd === '--help' || cmd === '-h') {
 } else if (cmd === 'd1:init') {
   d1Init(process.argv.slice(3));
 } else if (cmd === 'setup-cloudflare') {
-  setupCloudflare(process.argv.slice(3));
+  await setupCloudflareCmd(process.argv.slice(3));
 } else if (cmd === 'deploy:cloudflare') {
   await deployCloudflare(process.argv.slice(3));
 } else {
